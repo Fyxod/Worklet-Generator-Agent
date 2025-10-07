@@ -7,69 +7,103 @@ client = MongoClient(MONGO_URI)
 db = client["bedrock"]
 
 
-# Remove the required fields from the schema as we'll go forward to make it more flexible - fyxod
-user_schema = {
+thread_schema = {
     "$jsonSchema": {
         "bsonType": "object",
-        "required": ["userId", "name", "email", "password", "is_active", "threads"],
+        "required": ["thread_id", "thread_name", "count", "worklets", "worklet_files"],
         "properties": {
-            "userId": {"bsonType": "string"},
-            "name": {"bsonType": "string"},
-            "email": {"bsonType": "string"},
-            "password": {"bsonType": "string"},
-            "is_active": {"bsonType": "bool"},
-            "threads": {
-                "bsonType": "object",
-                "additionalProperties": {
+            "thread_id": {
+                "bsonType": "string",
+                "description": "Unique thread identifier",
+            },
+            "thread_name": {
+                "bsonType": "string",
+                "description": "Name of the thread",
+            },
+            "custom_prompt": {
+                "bsonType": ["string", "null"],
+                "description": "Optional custom prompt text",
+            },
+            "count": {
+                "bsonType": "int",
+                "minimum": 0,
+                "description": "Count value (non-negative integer)",
+            },
+            "links": {
+                "bsonType": ["array", "null"],
+                "items": {"bsonType": "string"},
+                "description": "List of related links",
+            },
+            "files": {
+                "bsonType": ["array", "null"],
+                "items": {"bsonType": "string"},
+                "description": "List of file references",
+            },
+            "worklet_files": {
+                "bsonType": "array",
+                "items": {"bsonType": "string"},
+                "description": "List of filenames or file references for worklets",
+            },
+            "worklets": {
+                "bsonType": "array",
+                "items": {
                     "bsonType": "object",
-                    "required": ["documents", "chats", "createdAt", "updatedAt", "extra_done"],
+                    "required": [
+                        "title",
+                        "problem_statement",
+                        "description",
+                        "challenge_use_case",
+                        "deliverables",
+                        "kpis",
+                        "prerequisites",
+                        "infrastructure_requirements",
+                        "tech_stack",
+                        "milestones",
+                        "references",
+                    ],
                     "properties": {
-                        "thread_name": {"bsonType": "string"},
-                        "documents": {
+                        "title": {"bsonType": "string"},
+                        "problem_statement": {"bsonType": "string"},
+                        "description": {"bsonType": "string"},
+                        "challenge_use_case": {"bsonType": "string"},
+                        "deliverables": {"bsonType": "string"},
+                        "kpis": {"bsonType": "array", "items": {"bsonType": "string"}},
+                        "prerequisites": {
+                            "bsonType": "array",
+                            "items": {"bsonType": "string"},
+                        },
+                        "infrastructure_requirements": {"bsonType": "string"},
+                        "tech_stack": {"bsonType": "string"},
+                        "milestones": {
+                            "bsonType": "object",
+                            "description": "Milestones over a 6-month period (key-value pairs)",
+                        },
+                        "references": {
                             "bsonType": "array",
                             "items": {
                                 "bsonType": "object",
-                                "required": ["docId", "title", "type", "time_uploaded", "file_name"],
+                                "required": ["title", "link", "description", "tag"],
                                 "properties": {
-                                    "docId": {"bsonType": "string"},
                                     "title": {"bsonType": "string"},
-                                    "type": {"bsonType": "string"},
-                                    "file_name": {"bsonType": "string"},
-                                    "time_uploaded": {"bsonType": "date"}
-                                }
-                            }
+                                    "link": {"bsonType": "string"},
+                                    "description": {"bsonType": "string"},
+                                    "tag": {"bsonType": "string"},
+                                },
+                            },
                         },
-                        "chats": {
-                            "bsonType": "array",
-                            "items": {
-                                "bsonType": "object",
-                                "required": ["type", "content", "timestamp"],
-                                "properties": {
-                                    "type": {"enum": ["agent", "user"]},
-                                    "content": {"bsonType": "string"},
-                                    "timestamp": {"bsonType": "date"},
-                                }
-                            }
-                        },
-                        "createdAt": {"bsonType": "date"},
-                        "updatedAt": {"bsonType": "date"},
-                        "extra_done": {
-                            "bsonType": "bool",
-                            "description": "Indicates if extra task is done",
-                        }
-                    }
-                }
-            }
-        }
+                    },
+                },
+            },
+        },
     }
 }
 
 
 try:
-    db.create_collection("users", validator=user_schema)
-    db.users.create_index("userId", unique=True)
-    print("Collection 'users' created with schema validation.")
+    db.create_collection("threads", validator=thread_schema)
+    db.threads.create_index("thread_id", unique=True)
+    print("Collection 'threads' created with schema validation.")
 except CollectionInvalid:
-    print("Collection 'users' already exists.")
+    print("Collection 'threads' already exists.")
 except Exception as e:
     print("Error creating collection:", e)

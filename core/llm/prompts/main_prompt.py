@@ -7,7 +7,6 @@ def unified_problem_generation_prompt(
     keywords: str,
     domains: str,
     count: int,
-    count_string: str,
 ):
     """
     Unified prompt that:
@@ -79,7 +78,7 @@ def unified_problem_generation_prompt(
             "   - Publishable research paper\n"
             "   - Patentable novelty\n\n"
             "2. **Feasibility:**\n"
-            "   - Projects should be achievable by Tier 1–2 Indian engineering colleges.\n"
+            "   - Projects should be achievable by Tier 1-2 Indian engineering colleges.\n"
             "   - Must use moderate infrastructure (open-source tools, limited cloud credits, public datasets).\n\n"
             "3. **Freshness:**\n"
             "   - Use latest (2025 or newer) tools, models, frameworks, APIs, and benchmarks.\n"
@@ -96,10 +95,10 @@ def unified_problem_generation_prompt(
             "  \"worklets\": [\n"
             "    {\n"
             "      \"title\": \"<one-line title>\",\n"
-            "      \"problem_statement\": \"<28–33 word problem summary>\",\n"
+            "      \"problem_statement\": \"<28-33 word problem summary>\",\n"
             "      \"description\": \"<context/background, up to 100 words>\",\n"
             "      \"challenge_use_case\": \"<specific challenge or scenario>\",\n"
-            "      \"deliverables\": \"<expected outputs – app, model, system, dataset, etc.>\",\n"
+            "      \"deliverables\": \"<expected outputs - app, model, system, dataset, etc.>\",\n"
             "      \"kpis\": [\"<metric 1>\", \"<metric 2>\", \"<metric 3>\", \"<metric 4>\"],\n"
             "      \"prerequisites\": [\"<prereq 1>\", \"<prereq 2>\", \"<prereq 3>\", \"<prereq 4>\", \"<prereq 5>\", \"<prereq 6>\"],\n"
             "      \"infrastructure_requirements\": \"<hardware requirements>\",\n"
@@ -131,7 +130,7 @@ def unified_problem_generation_prompt(
                 "}\n"
                 "```\n\n"
                 "If not, immediately generate exactly "
-                f"{count} ({count_string}) feasible and innovative project problem statements "
+                f"{count} feasible and innovative project problem statements "
                 "and return them in the JSON format specified earlier with:\n"
                 "\"web_search\": false,\n"
                 "\"web_search_queries\": []\n"
@@ -142,7 +141,7 @@ def unified_problem_generation_prompt(
             "role": "user",
             "parts": (
                 "A web search has already been performed. You must now generate exactly "
-                f"{count} ({count_string}) high-impact project problem statements using the provided data and web results.\n"
+                f"{count} high-impact project problem statements using the provided data and web results.\n"
                 "Do **not** recommend another web search. Respond only with valid JSON in the following structure:\n"
                 "```json\n"
                 "{\n"

@@ -11,7 +11,7 @@ tavily_api_key = os.getenv("TAVILY_API_KEY")
 client = TavilyClient(api_key=tavily_api_key)
 
 
-async def search_tavily(query: str, max_results: int = 5, depth: str = "advanced", include_answer: bool = True, include_favicon: bool = True):
+async def search_tavily(query: str, max_results: int = 4, depth: str = "advanced", include_answer: bool = True, include_favicon: bool = True):
     """
     Perform an asynchronous web search using Tavily API with retry logic.
 

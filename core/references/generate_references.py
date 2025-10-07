@@ -2,23 +2,12 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from time import time
 
-from core.llm.client import invoke_llm
-from core.llm.outputs import ReferenceKeywordResult
-from core.llm.prompts.reference_keyword_prompt import reference_search_keyword_prompt as keyword_prompt
 from core.models.worklet import Reference
 from pipeline.tools.search import search_tavily as search_tool
 from core.references.github import get_github_references
 from core.references.google_scholar import get_google_scholar_references
 
-async def generate_references(problem_statement, title, model) -> list[Reference]:
-
-    keyword = ""
-    try:
-        s = time.time()
-        keyword = await getKeyword(problem_statement or title, model)
-        print(f"Keyword generation took {time.time() - s:.2f} seconds: {keyword}")
-    except Exception as e:
-        keyword = title
+async def generate_references(keyword: str) -> list[Reference]:
 
     with ThreadPoolExecutor() as executor:
         loop = asyncio.get_running_loop()
@@ -44,9 +33,3 @@ async def generate_references(problem_statement, title, model) -> list[Reference
     response.extend(webReferences)
 
     return response
-
-
-async def getKeyword(title, model):
-    prompt = keyword_prompt(title)
-    response: ReferenceKeywordResult = await invoke_llm(gpu_model=model, contents=prompt, response_schema=ReferenceKeywordResult)
-    return response.keyword

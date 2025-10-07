@@ -10,10 +10,9 @@ from core.models.worklet import Worklet
 class AgentState(BaseModel):
     thread_id: str
     count: int
-    count_string: str
+    files: Optional[List[Any]] = None
     links: List[str] = Field(default_factory=list)
     custom_prompt: Optional[str] = None
-    model: str
     parsed_data: Optional[Documents]
     links_data: Dict[str, Any] = Field(default_factory=dict)
     web_search: Optional[bool] = False

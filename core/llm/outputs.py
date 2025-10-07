@@ -31,3 +31,6 @@ class WorkletGenerationResult(BaseModel):
 
 class ReferenceKeywordResult(BaseModel):
     keyword: str = Field(..., description="The generated keyword or phrase for searching relevant references")
+
+class ReferenceSortingResult(BaseModel):
+    sorted_indices: List[int] = Field(..., description="List of indices representing the sorted order of references (0-indexed) based on relevance")

@@ -1,49 +1,20 @@
 import aiofiles
 import asyncio
-import json
 import os
 import re
-import shutil
 import tempfile
 import time
-import traceback
 import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, File, Form, Query, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import APIRouter, File, Form, Query, UploadFile
+from fastapi.responses import FileResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-
-from app.llm import llm
-from app.socket import is_client_connected, sio
-from app.utils.generate_references import getReferenceWork
-from app.utils.generate_worklets import generate_worklets
-from app.utils.make_files import generatePdf
-from app.utils.link_extractor import get_links_data
-from app.utils.document_parser import extract_document
-
-class Query1(BaseModel):
-    query: str
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(BASE_DIR)
-
-UPLOAD_DIR = os.path.join(PROJECT_ROOT, "../worklets")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-GENERATED_DIR_PDF = os.path.join(PROJECT_ROOT, "resources/generated_worklets/pdf")
-os.makedirs(GENERATED_DIR_PDF, exist_ok=True)
-DESTINATION_DIR_PDF = os.path.join(PROJECT_ROOT, "./resources/archived_worklets/pdf")
-os.makedirs(DESTINATION_DIR_PDF, exist_ok=True)
-
-GENERATED_DIR_PPT = os.path.join(PROJECT_ROOT, "resources/generated_worklets/ppt")
-os.makedirs(GENERATED_DIR_PPT, exist_ok=True)
-DESTINATION_DIR_PPT = os.path.join(PROJECT_ROOT, "./resources/archived_worklets/ppt")
-os.makedirs(DESTINATION_DIR_PPT, exist_ok=True)
-
+from pipeline.state import AgentState
+from core.database import db
 os.makedirs("templates", exist_ok=True)
 
 router = APIRouter(prefix="/generate", tags=["generate"])
@@ -53,20 +24,37 @@ templates = Jinja2Templates(directory="templates")
 def sanitize_filename(filename):
     return re.sub(r'[\/:*?"<>|]', '_', filename)
 
-# @router.get("/", response_class=HTMLResponse)
-# async def read_root(request: Request):
-#     return templates.TemplateResponse("index.html", {"request": request})
 
 @router.post('/')
 async def upload_multiple(
     thread_id: Annotated[str, Form()],
-    links: Annotated[str, Form()],
+    thread_name: Annotated[str, Form()],
+    count: Annotated[int, Form()],
+    links: Annotated[list[str], Form()],
     custom_prompt: Annotated[str, Form()],
-    model: Annotated[str, Query()] = "qwen3:4b",
     files: Annotated[list[UploadFile], File()] = None,
 ):
+    thread_dict = {
+        "thread_id": thread_id,
+        "thread_name": thread_name,
+        "count": count,
+        "links": links,
+        "custom_prompt": custom_prompt,
+        "files": [],
+        "worklets": [],
+        "worklet_files": []
+    }
+    db.threads.insert_one(thread_dict)
 
-
+    start_time = time.time()
+    state = AgentState(
+        thread_id=thread_id,
+        count=5,
+        links=links,
+        custom_prompt=custom_prompt,
+        files=files
+    )
+    
 
 
 @router.get('/download/{file_name}')
@@ -160,8 +148,3 @@ def download_selected(received_files: FilesRequest, type: str = Query(...)):
 
     return FileResponse(zip_path, filename="worklets.zip", media_type="application/zip")
 
-
-@router.post('/query')
-async def create_query(query:Query1):
-    message = llm.invoke(query.query)
-    return message.content

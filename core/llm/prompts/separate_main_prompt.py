@@ -7,7 +7,6 @@ def problem_generation_prompt(
     keywords: str,
     domains: str,
     count: int,
-    count_string: str,
 ):
     """
     Builds a structured system prompt for generating feasible, high-impact Samsung PRISM
@@ -91,9 +90,9 @@ def problem_generation_prompt(
                 "   - If uncertain or lacking clarity, trigger a web search.\n"
                 "   - Query for multiple related technologies or trends simultaneously if needed.\n\n"
                 "6. **Quantity:**\n"
-                f"   - Generate **exactly {count} project problem statements** ({count_string}).\n\n"
+                f"   - Generate **exactly {count} project problem statements**.\n\n"
                 "7. **KPIs:**\n"
-                "   - Include 3–4 measurable, realistic metrics per problem.\n"
+                "   - Include 3-4 measurable, realistic metrics per problem.\n"
                 "   - Examples: “Accuracy ≥ 92%”, “Latency ≤ 200ms”, “Energy reduction ≥ 15%”.\n\n"
                 "8. **Freshness:**\n"
                 "   - Use cutting-edge frameworks, models, and datasets relevant to 2025 or later.\n"
@@ -157,7 +156,7 @@ def problem_generation_prompt(
         {
             "role": "user",
             "parts": (
-                f"Generate exactly **{count}** ({count_string}) feasible, research-aligned, and industry-relevant project problem statements "
+                f"Generate exactly **{count}** feasible, research-aligned, and industry-relevant project problem statements "
                 "based on the provided inputs and constraints. "
                 "Ensure strict adherence to the JSON schema and no inclusion of extra commentary or markdown."
             ),

@@ -38,11 +38,9 @@ async def parallel_search(queries, tool):
             )
     return cleaned_results
 
-
 def build_main_prompt(state: AgentState) -> str:
     return unified_problem_generation_prompt(
         count=state.count,
-        count_string=state.count_string,
         keywords=state.keywords,
         domains=state.domains,
         custom_prompt=state.custom_prompt or "",
