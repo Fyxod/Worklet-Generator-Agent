@@ -8,6 +8,7 @@ class Reference(BaseModel):
     tag: str = Field(..., description="Tag indicating the source of the reference, e.g., 'google', 'scholar'")
 
 class Worklet(BaseModel):
+    worklet_id: str = Field(..., description="Unique identifier for the worklet")
     title: str = Field(..., description="Title of the project idea")
     problem_statement: str = Field(..., description="Problem statement of the project idea (28-33 words)")
     description: str = Field(..., description="Description of the project idea (providing context/background, max 100 words)")

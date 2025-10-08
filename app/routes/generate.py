@@ -15,11 +15,12 @@ from core.database import db
 from pipeline.builder import Pipeline
 from core.utils.sanitize_filename import sanitize_filename
 from core.utils.process_array_string import process_array_string
+
 router = APIRouter(prefix="/generate", tags=["generate"])
 
 
-@router.post('/')
-async def upload_multiple(
+@router.post("/")
+async def generate(
     thread_id: Annotated[str, Form()],
     thread_name: Annotated[str, Form()],
     count: Annotated[int, Form()],
@@ -46,17 +47,19 @@ async def upload_multiple(
         "generated": False,
         "created_at": datetime.now(),
     }
-    print({
-        "thread_id": thread_id,
-        "thread_name": thread_name,
-        "count": count,
-        "links": links_array,
-        "custom_prompt": custom_prompt,
-        "files": files,
-    })
+    print(
+        {
+            "thread_id": thread_id,
+            "thread_name": thread_name,
+            "count": count,
+            "links": links_array,
+            "custom_prompt": custom_prompt,
+            "files": files,
+        }
+    )
     state = AgentState(
         thread_id=thread_id,
-        count=5,
+        count=count,
         files=files,
         links=links_array,
         custom_prompt=custom_prompt,
@@ -69,8 +72,16 @@ async def upload_multiple(
     end_time = time.time()
     print(f"Total time taken for the request: {end_time - start_time:.2f} seconds")
 
-    worklets = [worklet.model_dump() for worklet in state.worklets] if state.worklets else []
-    return {"message": "Processing started", "thread_id": thread_id, "worklets": worklets, "worklet_count": len(worklets)}
+    worklets = (
+        [worklet.model_dump() for worklet in state.worklets] if state.worklets else []
+    )
+
+    return {
+        "thread_id": thread_id,
+        "worklets": worklets,
+        "worklet_count": len(worklets),
+    }
+
 
 # @router.get('/download/{file_name}')
 # async def download(file_name: str):
@@ -85,11 +96,11 @@ async def upload_multiple(
 #         return FileResponse(
 #             file_path,
 #             media_type="application/pdf",
-#             filename=safe_filename 
+#             filename=safe_filename
 #         )
 #     return {"error": "File not found"}
 # class FilesRequest(BaseModel):
-#     files: list[str] 
+#     files: list[str]
 
 # @router.post("/download_all")
 # def download_selected(received_files: FilesRequest, type: str = Query(...)):
@@ -112,7 +123,7 @@ async def upload_multiple(
 #         - The zip file is created as a temporary file and returned as a downloadable response.
 #     """
 
-#     files = received_files.files 
+#     files = received_files.files
 #     if not files:
 #         return {"error": "No files provided."}
 
@@ -162,4 +173,3 @@ async def upload_multiple(
 
 
 #     return FileResponse(zip_path, filename="worklets.zip", media_type="application/zip")
-

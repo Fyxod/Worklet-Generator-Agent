@@ -11,7 +11,6 @@ from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN
 from pptx.dml.color import RGBColor
-from core.database import db
 from typing import Any, List, Optional, Sequence
 from core.models.worklet import Worklet
 from core.utils.sanitize_filename import sanitize_filename
@@ -132,10 +131,6 @@ async def generate_file(worklet: Worklet, thread_id: str) -> None:
     filename = safe_title if safe_title else f"untitled_{uuid.uuid4().hex[:8]}"
     filename_pdf = os.path.join(pdf_path, f"{safe_title}.pdf")
     filename_ppt = os.path.join(ppt_path, f"{safe_title}.pptx")
-
-    db.threads.update_one(
-        {"thread_id": thread_id}, {"$push": {"worklet_files": filename}}
-    )
 
     # Ensure directories exist
     os.makedirs(os.path.dirname(filename_pdf) or ".", exist_ok=True)

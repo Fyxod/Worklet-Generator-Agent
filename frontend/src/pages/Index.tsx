@@ -8,6 +8,7 @@ import { DomainKeywordModal } from '@/components/DomainKeywordModal';
 import { WebQueryModal } from '@/components/WebQueryModal';
 import { ThreadDetails } from '@/components/ThreadDetails';
 import { Thread, DomainsKeywords, ProgressMessage, Worklet } from '@/types/thread';
+import { Skeleton } from '@/components/ui/skeleton';
 import { getSocket } from '@/lib/socket';
 import { toast } from 'sonner';
 import { API_URL } from '@/config';
@@ -19,9 +20,14 @@ const Index = () => {
   
   const [threads, setThreads] = useState<Thread[]>([]);
   const [selectedThread, setSelectedThread] = useState<Thread | null>(null);
+  const [threadLoading, setThreadLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [progressMessages, setProgressMessages] = useState<ProgressMessage[]>([]);
   const [worklets, setWorklets] = useState<Worklet[]>([]);
+  // Stores to preserve per-thread progress & worklets when user navigates away
+  const [progressStore, setProgressStore] = useState<Record<string, ProgressMessage[]>>({});
+  const [workletsStore, setWorkletsStore] = useState<Record<string, Worklet[]>>({});
+  const [subscribedThreads, setSubscribedThreads] = useState<Set<string>>(new Set());
   
   const [domainKeywordModal, setDomainKeywordModal] = useState<{
     open: boolean;
@@ -50,7 +56,14 @@ const Index = () => {
     try {
       const response = await fetch(`${API_URL}/thread/all`);
       const data = await response.json();
-      setThreads(data.threads || []);
+      const fetched: Thread[] = data.threads || [];
+      // Sort descending by created_at (most recent first). Guard against invalid dates.
+      const sorted = [...fetched].sort((a, b) => {
+        const aTime = a?.created_at ? new Date(a.created_at).getTime() : 0;
+        const bTime = b?.created_at ? new Date(b.created_at).getTime() : 0;
+        return bTime - aTime; // descending
+      });
+      setThreads(sorted);
     } catch (error) {
       console.error('Error fetching threads:', error);
       toast.error('Failed to fetch threads');
@@ -59,33 +72,53 @@ const Index = () => {
 
   const fetchThread = async (id: string) => {
     try {
+      setThreadLoading(true);
       const response = await fetch(`${API_URL}/thread/${id}`);
       const data = await response.json();
       setSelectedThread(data);
 
       if (!data.generated) {
         setupSocketListeners(id);
+        // hydrate previous progress/worklets if they exist in store
+        setProgressMessages(progressStore[id] || []);
+        setWorklets(workletsStore[id] || []);
       } else {
         if (data.worklets && data.worklets.length > 0) {
+          setWorkletsStore(prev => ({ ...prev, [id]: data.worklets }));
           setWorklets(data.worklets);
         } else {
-          // Clear previous thread's worklets to prevent stale display
-          setWorklets([]);
+          // use any stored worklets if available
+          setWorklets(workletsStore[id] || []);
         }
+        // also restore any stored progress (may be empty)
+        setProgressMessages(progressStore[id] || []);
       }
     } catch (error) {
       console.error('Error fetching thread:', error);
       toast.error('Failed to fetch thread');
     }
+    finally {
+      setThreadLoading(false);
+    }
   };
 
   const setupSocketListeners = (id: string) => {
+    // Avoid duplicate subscriptions
+    if (subscribedThreads.has(id)) return;
+    setSubscribedThreads(prev => new Set(prev).add(id));
+
     const socket = getSocket();
 
     socket.on(`${id}/status_update`, (data: { message: string }) => {
       const timestamp = Date.now();
       console.log(`[${new Date(timestamp).toISOString()}] Progress:`, data.message);
-      setProgressMessages(prev => [...prev, { message: data.message, timestamp }]);
+      setProgressStore(prev => {
+        const existing = prev[id] || [];
+        const updated = [...existing, { message: data.message, timestamp }];
+        // If viewing this thread currently, reflect in UI state
+        if (threadId === id) setProgressMessages(updated);
+        return { ...prev, [id]: updated };
+      });
     });
 
     socket.on(`${id}/topic_approval`, (data: DomainsKeywords) => {
@@ -97,8 +130,12 @@ const Index = () => {
     });
 
     socket.on(`${id}/file_generated`, (data: { worklet: Worklet }) => {
-      // Backend now should emit the full worklet object
-      setWorklets(prev => [...prev, data.worklet]);
+      setWorkletsStore(prev => {
+        const existing = prev[id] || [];
+        const updated = [...existing, data.worklet];
+        if (threadId === id) setWorklets(updated);
+        return { ...prev, [id]: updated };
+      });
     });
   };
 
@@ -140,9 +177,16 @@ const Index = () => {
     };
 
     setSelectedThread(optimisticThread);
+    // Optimistically insert at top of sidebar list
+    setThreads(prev => {
+      const filtered = prev.filter(t => t.thread_id !== newThreadId);
+      return [optimisticThread as Thread, ...filtered];
+    });
     setShowForm(false);
     setProgressMessages([]);
     setWorklets([]);
+    setProgressStore(prev => ({ ...prev, [newThreadId]: [] }));
+    setWorkletsStore(prev => ({ ...prev, [newThreadId]: [] }));
 
     // Navigate to the new thread URL
     navigate(`/${newThreadId}`);
@@ -177,6 +221,9 @@ const Index = () => {
         generated: true,
         worklets: data.worklets || prev.worklets
       } : prev);
+      if (data.worklets) {
+        setWorkletsStore(prev => ({ ...prev, [newThreadId]: data.worklets }));
+      }
       setProgressMessages(prev => [
         ...prev,
         { message: 'Worklets generated successfully', timestamp: Date.now() },
@@ -199,8 +246,15 @@ const Index = () => {
   };
 
   const handleSelectThread = (id: string) => {
-    // Clear current worklets immediately to prevent showing previous thread's list while loading
-    setWorklets([]);
+    // If the user clicks the already selected thread, do nothing
+    if (id === threadId) return;
+    // Persist current thread's progress/worklets before switching
+    if (selectedThread) {
+      setProgressStore(prev => ({ ...prev, [selectedThread.thread_id]: progressMessages }));
+      setWorkletsStore(prev => ({ ...prev, [selectedThread.thread_id]: worklets }));
+    }
+    setSelectedThread(null);
+    setThreadLoading(true);
     navigate(`/${id}`);
   };
 
@@ -264,7 +318,13 @@ const Index = () => {
             <ThreadForm onGenerate={handleGenerate} />
           )}
           
-          {selectedThread && (
+          {threadLoading && (
+            <div className="space-y-6">
+              <CardSkeleton />
+              <CardSkeleton />
+            </div>
+          )}
+          {!threadLoading && selectedThread && (
             <>
               {!selectedThread.generated && (
                 <ProgressBar messages={progressMessages} />
@@ -296,3 +356,19 @@ const Index = () => {
 };
 
 export default Index;
+
+// Lightweight card skeleton for loading state
+const CardSkeleton = () => (
+  <div className="p-6 border border-border rounded-lg bg-card space-y-4 animate-pulse">
+    <Skeleton className="h-6 w-1/3" />
+    <div className="space-y-2">
+      <Skeleton className="h-4 w-1/2" />
+      <Skeleton className="h-4 w-2/3" />
+      <Skeleton className="h-4 w-1/3" />
+    </div>
+    <div className="grid grid-cols-2 gap-2 pt-2">
+      <Skeleton className="h-9 w-full" />
+      <Skeleton className="h-9 w-full" />
+    </div>
+  </div>
+);

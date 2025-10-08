@@ -10,7 +10,7 @@ db = client["bedrock"]
 thread_schema = {
     "$jsonSchema": {
         "bsonType": "object",
-        "required": ["thread_id", "thread_name", "count", "worklets", "worklet_files", "created_at"],
+        "required": ["thread_id", "thread_name", "count", "worklets", "created_at"],
         "properties": {
             "thread_id": {
                 "bsonType": "string",
@@ -39,11 +39,6 @@ thread_schema = {
                 "items": {"bsonType": "string"},
                 "description": "List of file references",
             },
-            "worklet_files": {
-                "bsonType": "array",
-                "items": {"bsonType": "string"},
-                "description": "List of filenames or file references for worklets",
-            },
             "generated": {
                 "bsonType": "bool",
                 "description": "Flag to indicate whether worklets have been generated for this thread",
@@ -57,6 +52,7 @@ thread_schema = {
                 "items": {
                     "bsonType": "object",
                     "required": [
+                        "worklet_id",
                         "title",
                         "problem_statement",
                         "description",
@@ -70,6 +66,7 @@ thread_schema = {
                         "references",
                     ],
                     "properties": {
+                        "worklet_id": {"bsonType": "string"},
                         "title": {"bsonType": "string"},
                         "problem_statement": {"bsonType": "string"},
                         "description": {"bsonType": "string"},
