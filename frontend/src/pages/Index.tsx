@@ -52,6 +52,21 @@ const Index = () => {
     fetchThread(threadId);
   }, [threadId]);
 
+  // Ensure that navigating directly to /new (e.g., typing URL or page refresh) shows the form
+  useEffect(() => {
+    if (location.pathname === '/new') {
+      // Mirror the behavior of clicking the New Thread button
+      if (!showForm) setShowForm(true);
+      if (selectedThread) setSelectedThread(null);
+    } else {
+      // Leaving /new should hide the form unless explicitly re-opened
+      if (showForm && location.pathname !== '/new') {
+        setShowForm(false);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
+
   const fetchThreads = async () => {
     try {
       const response = await fetch(`${API_URL}/thread/all`);
@@ -115,13 +130,22 @@ const Index = () => {
       setProgressStore(prev => {
         const existing = prev[id] || [];
         const updated = [...existing, { message: data.message, timestamp }];
-        // If viewing this thread currently, reflect in UI state
-        if (threadId === id) setProgressMessages(updated);
         return { ...prev, [id]: updated };
+      });
+      // Update visible progress immediately if this thread is currently selected (route param may lag)
+      setProgressMessages(current => {
+        // If we are already displaying the latest message sequence, skip duplicate set
+        if (selectedThread?.thread_id === id) {
+          // Avoid recreating array if nothing changed
+          if (current.length && current[current.length - 1].timestamp === timestamp) return current;
+          return [...current, { message: data.message, timestamp }];
+        }
+        return current;
       });
     });
 
     socket.on(`${id}/topic_approval`, (data: DomainsKeywords) => {
+      console.log('Received topic approval request:', data);
       setDomainKeywordModal({ open: true, data });
     });
 
@@ -282,6 +306,16 @@ const Index = () => {
     socket.emit(`${threadId}/web_response`, { queries });
     setWebQueryModal({ open: false, queries: [] });
   };
+
+  // Hydrate progress messages if we navigated (threadId changed) and we already have stored progress
+  useEffect(() => {
+    if (threadId && progressStore[threadId] && progressStore[threadId].length > 0) {
+      // Only hydrate if current list is empty or behind
+      if (progressMessages.length < progressStore[threadId].length) {
+        setProgressMessages(progressStore[threadId]);
+      }
+    }
+  }, [threadId, progressStore]);
 
   return (
     <div className="flex h-screen w-full bg-background">

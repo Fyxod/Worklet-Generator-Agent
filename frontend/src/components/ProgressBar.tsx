@@ -89,7 +89,8 @@ export const ProgressBar = ({ messages }: ProgressBarProps) => {
           <Loader2 className="h-5 w-5 text-primary animate-spin" />
           <div className="flex-1">
             <p
-              className={`text-sm font-medium text-foreground transition-opacity duration-${FADE_DURATION} ${isFading ? 'opacity-0' : 'opacity-100'}`}
+              className={`text-sm font-medium text-foreground transition-opacity ${isFading ? 'opacity-0' : 'opacity-100'}`}
+              style={{ transitionDuration: `${FADE_DURATION}ms` }}
             >
               {currentMessage}
             </p>
