@@ -62,11 +62,16 @@ const Index = () => {
       const response = await fetch(`${API_URL}/thread/${id}`);
       const data = await response.json();
       setSelectedThread(data);
-      
+
       if (!data.generated) {
         setupSocketListeners(id);
       } else {
-  setWorklets(data.worklets || []);
+        if (data.worklets && data.worklets.length > 0) {
+          setWorklets(data.worklets);
+        } else {
+          // Clear previous thread's worklets to prevent stale display
+          setWorklets([]);
+        }
       }
     } catch (error) {
       console.error('Error fetching thread:', error);
@@ -194,6 +199,8 @@ const Index = () => {
   };
 
   const handleSelectThread = (id: string) => {
+    // Clear current worklets immediately to prevent showing previous thread's list while loading
+    setWorklets([]);
     navigate(`/${id}`);
   };
 

@@ -3,8 +3,10 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Thread, Worklet } from '@/types/thread';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { API_URL } from '@/config';
+import { toast } from 'sonner';
 import { useState } from 'react';
 
 interface ThreadDetailsProps {
@@ -25,7 +27,7 @@ export const ThreadDetails = ({ thread, worklets }: ThreadDetailsProps) => {
     if (!selected) return;
     try {
       const res = await fetch(`${API_URL}/${thread.thread_id}/download/${selected.worklet_id}/${type}`);
-      if (!res.ok) throw new Error('Failed to download');
+      if (!res.ok) throw new Error(`Failed to download ${type.toUpperCase()} for worklet`);
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -35,8 +37,32 @@ export const ThreadDetails = ({ thread, worklets }: ThreadDetailsProps) => {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
+      toast.success(`${type.toUpperCase()} downloaded`);
     } catch (e) {
       console.error(e);
+      toast.error(e instanceof Error ? e.message : 'Download failed');
+    }
+  };
+
+  const handleDownloadAll = async (type: 'pdf' | 'ppt') => {
+    try {
+      const res = await fetch(`${API_URL}/thread/${thread.thread_id}/download/all/${type}`);
+      if (!res.ok) throw new Error(`Failed to download all worklets as ${type.toUpperCase()}`);
+      const disposition = res.headers.get('Content-Disposition');
+      const suggestedName = disposition?.match(/filename="?([^";]+)"?/)?.[1] || `worklets.${type}`;
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = suggestedName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success(`All worklets (${type.toUpperCase()}) downloaded`);
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : 'Bulk download failed');
     }
   };
 
@@ -107,14 +133,18 @@ export const ThreadDetails = ({ thread, worklets }: ThreadDetailsProps) => {
         <Card className="p-6 bg-card border-border space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-xl font-semibold text-foreground">Generated Files</h3>
-            <Button
-              className="gradient-accent hover:opacity-90 transition-smooth"
-              disabled
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Download All
-            </Button>
-            {/* TODO: Implement bulk download endpoint when backend provides specification */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="gradient-accent hover:opacity-90 transition-smooth">
+                  <Download className="h-4 w-4 mr-2" />
+                  Download All
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleDownloadAll('pdf')}>PDF (All)</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDownloadAll('ppt')}>PPT (All)</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           
           <div className="grid grid-cols-2 gap-3">
