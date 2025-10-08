@@ -3,18 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# C extensions
-*.so
-*.txt
-#ignoring pdf files
-*.pdf
 #poetry
-resources
-*.jpg
-*.jpeg
-*.json
-*.pptx
-*.pdf
 # Distribution / packaging
 latest_generated.json
 google_scholar_organic_results_data.json
