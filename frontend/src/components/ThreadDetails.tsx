@@ -5,10 +5,10 @@ import { Thread } from '@/types/thread';
 
 interface ThreadDetailsProps {
   thread: Thread;
-  generatedFiles: string[];
+  worklets: string[];
 }
 
-export const ThreadDetails = ({ thread, generatedFiles }: ThreadDetailsProps) => {
+export const ThreadDetails = ({ thread, worklets }: ThreadDetailsProps) => {
   console.log('ThreadDetails rendered with thread:', thread);
   return (
     <div className="space-y-6 p-6">
@@ -73,7 +73,7 @@ export const ThreadDetails = ({ thread, generatedFiles }: ThreadDetailsProps) =>
         </div>
       </Card>
 
-      {generatedFiles.length > 0 && (
+      {worklets.length > 0 && (
         <Card className="p-6 bg-card border-border space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-xl font-semibold text-foreground">Generated Files</h3>
@@ -86,7 +86,7 @@ export const ThreadDetails = ({ thread, generatedFiles }: ThreadDetailsProps) =>
           </div>
           
           <div className="grid grid-cols-2 gap-3">
-            {generatedFiles.map((file, index) => (
+            {worklets.map((file, index) => (
               <Button
                 key={index}
                 variant="outline"

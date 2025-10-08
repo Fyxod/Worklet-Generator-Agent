@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Plus, X, Upload, FileIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,11 +18,23 @@ interface ThreadFormProps {
 }
 
 export const ThreadForm = ({ onGenerate }: ThreadFormProps) => {
-  const [threadName, setThreadName] = useState('');
-  const [customPrompt, setCustomPrompt] = useState('');
-  const [links, setLinks] = useState<string[]>(['']);
-  const [files, setFiles] = useState<File[]>([]);
-  const [count, setCount] = useState(5);
+  const location = useLocation();
+  const state = (location.state as any) || {};
+  const previous = state.previousFormData || {};
+
+  const [threadName, setThreadName] = useState(previous.thread_name || '');
+  const [customPrompt, setCustomPrompt] = useState(previous.custom_prompt || '');
+  const [links, setLinks] = useState<string[]>(previous.links && previous.links.length ? previous.links : ['']);
+  const [files, setFiles] = useState<File[]>(previous.files || []);
+  const [count, setCount] = useState(previous.count || 5);
+
+  // Clear location state after hydrating to avoid stale refills on subsequent navigations
+  useEffect(() => {
+    if (state.previousFormData) {
+      history.replaceState({}, document.title, location.pathname);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const addLink = () => {
     setLinks([...links, '']);

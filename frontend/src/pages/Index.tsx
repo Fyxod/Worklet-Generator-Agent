@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Sidebar } from '@/components/Sidebar';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { ThreadForm } from '@/components/ThreadForm';
@@ -15,12 +15,13 @@ import { API_URL } from '@/config';
 const Index = () => {
   const navigate = useNavigate();
   const { threadId } = useParams();
+  const location = useLocation();
   
   const [threads, setThreads] = useState<Thread[]>([]);
   const [selectedThread, setSelectedThread] = useState<Thread | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [progressMessages, setProgressMessages] = useState<ProgressMessage[]>([]);
-  const [generatedFiles, setGeneratedFiles] = useState<string[]>([]);
+  const [worklets, setWorklets] = useState<string[]>([]);
   
   const [domainKeywordModal, setDomainKeywordModal] = useState<{
     open: boolean;
@@ -37,9 +38,12 @@ const Index = () => {
   }, []);
 
   useEffect(() => {
-    if (threadId) {
-      fetchThread(threadId);
+    if (!threadId) return;
+    // If we already have a selectedThread that matches and is local optimistic, skip fetching
+    if (selectedThread && selectedThread.thread_id === threadId && selectedThread.local) {
+      return;
     }
+    fetchThread(threadId);
   }, [threadId]);
 
   const fetchThreads = async () => {
@@ -62,7 +66,7 @@ const Index = () => {
       if (!data.generated) {
         setupSocketListeners(id);
       } else {
-        setGeneratedFiles(data.generated_files || []);
+        setWorklets(data.worklets || []);
       }
     } catch (error) {
       console.error('Error fetching thread:', error);
@@ -88,61 +92,117 @@ const Index = () => {
     });
 
     socket.on(`${id}/file_generated`, (data: { filename: string }) => {
-      setGeneratedFiles(prev => [...prev, data.filename]);
+      setWorklets(prev => [...prev, data.filename]);
     });
   };
 
   const handleNewThread = () => {
+    // Navigate to /new to reflect new thread creation intent
+    if (location.pathname !== '/new') {
+      navigate('/new', { replace: false });
+    }
     setShowForm(true);
     setSelectedThread(null);
+    setProgressMessages([]);
+    setWorklets([]);
   };
 
   const handleStartGenerating = () => {
+    if (location.pathname !== '/new') {
+      navigate('/new');
+    }
     setShowForm(true);
   };
 
   const handleGenerate = async (formData: any) => {
+    // Preserve form data in case of failure
+    const previousFormData = { ...formData };
     const newThreadId = crypto.randomUUID();
-    navigate(`/${newThreadId}`);
-    
+
+    // Optimistically create a local thread representation
+    const optimisticThread = {
+      thread_id: newThreadId,
+      thread_name: formData.thread_name,
+      custom_prompt: formData.custom_prompt,
+      links: formData.links,
+      files: formData.files,
+      count: formData.count,
+      generated: false,
+      created_at: new Date().toISOString(),
+      worklets: [] as string[],
+      local: true,
+    };
+
+    setSelectedThread(optimisticThread);
+    setShowForm(false);
     setProgressMessages([]);
-    setGeneratedFiles([]);
+    setWorklets([]);
+
+    // Navigate to the new thread URL
+    navigate(`/${newThreadId}`);
+
+    // Start listening for updates BEFORE sending request
     setupSocketListeners(newThreadId);
 
     const body = new FormData();
-    body.append("thread_id", newThreadId);
-    body.append("thread_name", formData.thread_name);
-    body.append("custom_prompt", formData.custom_prompt);
-    body.append("count", formData.count.toString());
-    body.append("links", JSON.stringify(formData.links));
-    
-    formData.files.forEach((file: File) => body.append("files", file));
+    body.append('thread_id', newThreadId);
+    body.append('thread_name', formData.thread_name);
+    body.append('custom_prompt', formData.custom_prompt);
+    body.append('count', formData.count.toString());
+    body.append('links', JSON.stringify(formData.links));
+    formData.files.forEach((file: File) => body.append('files', file));
 
+    try {
+      const response = await fetch(`${API_URL}/generate`, {
+        method: 'POST',
+        body,
+      });
 
-  try {
-    const response = await fetch(`${API_URL}/generate`, {
-      method: "POST",
-      body,
-    });
-
-      if (response.ok) {
-        const data = await response.json();
-        setGeneratedFiles(data.generated_files || []);
-        setProgressMessages(prev => [...prev, { 
-          message: 'Worklets generated successfully', 
-          timestamp: Date.now() 
-        }]);
-        fetchThreads();
-        toast.success('Worklets generated successfully');
+      if (!response.ok) {
+        throw new Error(`Backend responded with status ${response.status}`);
       }
+
+  const data = await response.json();
+      setWorklets(data.worklets || []);
+      // Mark thread as generated & not local anymore so the progress bar disappears
+      setSelectedThread(prev => prev ? { 
+        ...prev,
+        local: false,
+        generated: true,
+        worklets: data.worklets || prev.worklets
+      } : prev);
+      setProgressMessages(prev => [
+        ...prev,
+        { message: 'Worklets generated successfully', timestamp: Date.now() },
+      ]);
+      fetchThreads();
+      toast.success('Worklets generated successfully');
     } catch (error) {
       console.error('Error generating worklets:', error);
       toast.error('Failed to generate worklets');
+
+      // Revert to /new with previously entered form data preserved in form component state
+      // We store temporary state to allow the form to repopulate.
+      // Approach: pass state via navigation so ThreadForm can potentially use it (would require ThreadForm changes if we want auto-fill).
+      navigate('/new', { state: { previousFormData } });
+      setShowForm(true);
+      setSelectedThread(null);
+      setProgressMessages([]);
+      setWorklets([]);
     }
   };
 
   const handleSelectThread = (id: string) => {
     navigate(`/${id}`);
+  };
+
+  const handleHeaderClick = () => {
+    // Return to welcome screen
+    navigate('/');
+    setShowForm(false);
+    setSelectedThread(null);
+    setProgressMessages([]);
+    setWorklets([]);
   };
 
   const handleDomainKeywordSubmit = (data: DomainsKeywords) => {
@@ -173,18 +233,26 @@ const Index = () => {
       <main className="flex-1 overflow-auto">
         <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
           <div className="p-6">
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              Worklet Generator Agent
-            </h1>
+            <button
+              type="button"
+              onClick={handleHeaderClick}
+              className="text-left focus:outline-none"
+            >
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                Worklet Generator Agent
+              </h1>
+            </button>
           </div>
         </header>
 
         <div className="p-6">
-          {!showForm && !selectedThread && (
+          {/* Show welcome screen only on root path ("/") with no thread selected and not in /new */}
+          {!showForm && !selectedThread && location.pathname === '/' && (
             <WelcomeScreen onStartGenerating={handleStartGenerating} />
           )}
           
-          {showForm && !selectedThread && (
+          {/* Show form when /new route is active and no thread selected */}
+          {showForm && !selectedThread && location.pathname === '/new' && (
             <ThreadForm onGenerate={handleGenerate} />
           )}
           
@@ -195,7 +263,7 @@ const Index = () => {
               )}
               <ThreadDetails
                 thread={selectedThread}
-                generatedFiles={generatedFiles}
+                worklets={worklets}
               />
             </>
           )}

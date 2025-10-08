@@ -7,7 +7,9 @@ export interface Thread {
   count: number;
   generated: boolean;
   created_at: string;
-  generated_files?: string[];
+  worklets?: string[];
+  /** Indicates this thread object was created optimistically on the client and not yet confirmed via GET /thread/{id} */
+  local?: boolean;
 }
 
 export interface DomainsKeywords {
