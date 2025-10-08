@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -13,10 +13,10 @@ class AgentState(BaseModel):
     files: Optional[List[Any]] = None
     links: List[str] = Field(default_factory=list)
     custom_prompt: Optional[str] = None
-    parsed_data: Optional[Documents]
-    links_data: Dict[str, Any] = Field(default_factory=dict)
+    parsed_data: Optional[Documents] = None
+    generation_output: Optional[WorkletGenerationResult] = None
+    keywords_domains: Optional[KeywordsExtractionResult] = None
+    links_data: Optional[Dict[str, Any]] = Field(default_factory=dict)
     web_search: Optional[bool] = False
-    web_search_results: Optional[Dict[str, str]] = Field(default_factory=dict)
-    generation_output: Optional[WorkletGenerationResult]
-    keywords_domains: Optional[KeywordsExtractionResult]
-    worklets: List[Worklet] = Field(default_factory=list)
+    web_search_results: Optional[Union[Dict, List]] = Field(default_factory=list)
+    worklets: Optional[List[Worklet]] = Field(default_factory=list)

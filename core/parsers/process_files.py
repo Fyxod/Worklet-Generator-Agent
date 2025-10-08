@@ -32,7 +32,7 @@ async def process_files(
 
     # Helper to process one file
     async def process_file(file_data):
-        await sio.emit(f"{thread_id}/progress", {"message": f"Processing {file_data['title']}"})
+        await sio.emit(f"{thread_id}/status_update", {"message": f"Processing {file_data['title']}"})
         parsed_data = await extract_document(
             path=file_data["path"],
             title=file_data["title"],

@@ -27,13 +27,10 @@ async def upload_files(files, thread_id: str) -> List[dict]:
         name, ext = os.path.splitext(file.filename)
         file_name = f"{name}_{timestamp}{ext}"
         file_path = os.path.join(upload_dir, file_name)
-        await sio.emit(f"progress", {"message": f"Uploading {file.filename}"})
         
         async with aiofiles.open(file_path, "wb") as f:
             content = await file.read()
             await f.write(content)
-            
-        await sio.emit(f"progress", {"message": f"Uploaded {file.filename}"})
 
         files_data.append({
             "title": file.filename,

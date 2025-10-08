@@ -51,7 +51,7 @@ def reference_sorting_prompt(
             "role": "system",
             "parts": (
                 "### MANDATORY OUTPUT CONSTRAINTS\n"
-                "1. Return **only** a JSON array of indices sorted in **decreasing order of relevance**.\n"
+                "1. Produce an array of indices sorted in **decreasing order of relevance**.\n"
                 "2. Indices correspond exactly to the order of items in the original input list (0-indexed).\n"
                 "3. Do **not** include any explanations, commentary, or additional formatting.\n"
                 "Sorting must be in **decreasing order of relevance** — most relevant first."
@@ -65,7 +65,6 @@ def reference_sorting_prompt(
             "role": "user",
             "parts": (
                 f"Here are the references to analyze:\n\n{references}\n\n"
-                "Return only the sorted array of indices as per the rules above."
             ),
         }
     )

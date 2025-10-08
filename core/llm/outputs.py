@@ -3,14 +3,14 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
-class SourceKeywords(BaseModel):
-    keywords: List[str]
-    domains: List[str]
+class Sources(BaseModel):
+    worklet: List[str]
+    link: List[str]
+    custom_prompt: List[str]
 
 class KeywordsExtractionResult(BaseModel):
-    worklet: SourceKeywords
-    link: SourceKeywords
-    custom_prompt: SourceKeywords
+    keywords: Sources
+    domains: Sources
 
 class Worklet(BaseModel):
     title: str = Field(..., description="Title of the project idea")
@@ -30,7 +30,8 @@ class WorkletGenerationResult(BaseModel):
     web_search_queries: Optional[List[str]] = Field(default_factory=list, description="List of web search queries to be performed if web_search is True")
 
 class ReferenceKeywordResult(BaseModel):
-    keyword: str = Field(..., description="The generated keyword or phrase for searching relevant references")
+    google_scholar_keyword: str = Field(..., description="The generated keyword or phrase for searching relevant academic papers on Google Scholar")
+    github_keyword: str = Field(..., description="The generated keyword or phrase for searching relevant GitHub repositories")
 
 class ReferenceSortingResult(BaseModel):
     sorted_indices: List[int] = Field(..., description="List of indices representing the sorted order of references (0-indexed) based on relevance")

@@ -11,24 +11,25 @@ from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN
 from pptx.dml.color import RGBColor
-
+from core.database import db
 from typing import Any, List, Optional, Sequence
 from core.models.worklet import Worklet
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(BASE_DIR)
+from core.utils.sanitize_filename import sanitize_filename
 
-CUSTOM_PAGE_SIZE = (750,900)  # Width x Height in points (1 point = 1/72 inch) used by pdf
+CUSTOM_PAGE_SIZE = (
+    750,
+    900,
+)  # Width x Height in points (1 point = 1/72 inch) used by pdf
+import uuid
 
 # small vertical gap (in inches) used between dynamic blocks in PPT
-gap=0.3
+gap = 0.3
 DEFAULT_PPT_GAP_INCH = 0.3
+
 
 # ---------------------------
 # Utility helpers
 # ---------------------------
-def sanitize_filename(filename: str) -> str:
-    """Replace filesystem-unfriendly chars with underscores."""
-    return re.sub(r'[\/:*?"<>|]', '_', filename)
 
 
 def ensure_list(value: Any) -> List:
@@ -70,37 +71,71 @@ def extract_reference_field(ref: Any, possible_keys: Sequence[str]) -> Optional[
 # Mapping of canonical fields to possible keys/names in older dicts or new models
 FIELD_KEYS = {
     "title": ["title", "Title"],
-    "problem_statement": ["problem_statement", "Problem Statement", "problem statement", "problemStatement"],
+    "problem_statement": [
+        "problem_statement",
+        "Problem Statement",
+        "problem statement",
+        "problemStatement",
+    ],
     "description": ["description", "Description"],
-    "challenge_use_case": ["challenge_use_case", "Challenge / Use Case", "Challenge", "challenge Use Case"],
+    "challenge_use_case": [
+        "challenge_use_case",
+        "Challenge / Use Case",
+        "Challenge",
+        "challenge Use Case",
+    ],
     "deliverables": ["deliverables", "Deliverables"],
     "kpis": ["kpis", "KPIs", "KPI", "Kpis"],
     "prerequisites": ["prerequisites", "Prerequisites"],
-    "infrastructure_requirements": ["infrastructure_requirements", "Infrastructure Requirements", "Infrastructure"],
-    "tech_stack": ["tech_stack", "Tentative Tech Stack", "Tentative_Tech_Stack", "Tentative Tech Stack"],
-    "milestones": ["milestones", "Milestones (6 months)", "Milestones", "milestones_6_months"],
+    "infrastructure_requirements": [
+        "infrastructure_requirements",
+        "Infrastructure Requirements",
+        "Infrastructure",
+    ],
+    "tech_stack": [
+        "tech_stack",
+        "Tentative Tech Stack",
+        "Tentative_Tech_Stack",
+        "Tentative Tech Stack",
+    ],
+    "milestones": [
+        "milestones",
+        "Milestones (6 months)",
+        "Milestones",
+        "milestones_6_months",
+    ],
     "references": ["references", "Reference Work", "Reference", "Reference_Work"],
 }
 
 
 # ---------------------------
-# Main async generator
+# Main generator
 # ---------------------------
 async def generate_file(worklet: Worklet, thread_id: str) -> None:
     """
     Entrypoint to generate both PDF and PPT for a worklet.
     Accepts either a Pydantic Worklet instance or a legacy dict-like worklet.
     """
-    ppt_path = os.path.join(PROJECT_ROOT, "data/threads", thread_id, "generated_worklets/ppt")
-    pdf_path = os.path.join(PROJECT_ROOT, "data/threads", thread_id, "generated_worklets/pdf")
+    ppt_path = os.path.join(
+        "data/threads", thread_id, "generated_worklets/ppt"
+    )
+    pdf_path = os.path.join(
+        "data/threads", thread_id, "generated_worklets/pdf"
+    )
     os.makedirs(ppt_path, exist_ok=True)
     os.makedirs(pdf_path, exist_ok=True)
-    
+
     # Resolve title safely (handle dicts or objects)
     title = safe_get(worklet, FIELD_KEYS["title"], default="untitled")
     safe_title = sanitize_filename(title)
+
+    filename = safe_title if safe_title else f"untitled_{uuid.uuid4().hex[:8]}"
     filename_pdf = os.path.join(pdf_path, f"{safe_title}.pdf")
     filename_ppt = os.path.join(ppt_path, f"{safe_title}.pptx")
+
+    db.threads.update_one(
+        {"thread_id": thread_id}, {"$push": {"worklet_files": filename}}
+    )
 
     # Ensure directories exist
     os.makedirs(os.path.dirname(filename_pdf) or ".", exist_ok=True)
@@ -124,9 +159,22 @@ def create_pdf(filename: str, worklet: Any):
         width, height = CUSTOM_PAGE_SIZE
 
         styles = getSampleStyleSheet()
-        header_style = ParagraphStyle('header_style', parent=styles['Heading1'], fontSize=20, textColor=colors.darkblue)
-        normal_style = ParagraphStyle('normal_style', parent=styles['BodyText'], fontSize=12, leading=15)
-        bullet_style = ParagraphStyle('bullet_style', parent=styles['BodyText'], fontSize=12, leftIndent=20, bulletIndent=10)
+        header_style = ParagraphStyle(
+            "header_style",
+            parent=styles["Heading1"],
+            fontSize=20,
+            textColor=colors.darkblue,
+        )
+        normal_style = ParagraphStyle(
+            "normal_style", parent=styles["BodyText"], fontSize=12, leading=15
+        )
+        bullet_style = ParagraphStyle(
+            "bullet_style",
+            parent=styles["BodyText"],
+            fontSize=12,
+            leftIndent=20,
+            bulletIndent=10,
+        )
 
         frame = Frame(40, 40, width - 80, height - 100, showBoundary=0)
         elements = []
@@ -138,7 +186,9 @@ def create_pdf(filename: str, worklet: Any):
 
         problem = safe_get(worklet, FIELD_KEYS["problem_statement"])
         if problem:
-            elements.append(Paragraph(f"<b>Problem Statement:</b> {problem}", normal_style))
+            elements.append(
+                Paragraph(f"<b>Problem Statement:</b> {problem}", normal_style)
+            )
 
         desc = safe_get(worklet, FIELD_KEYS["description"])
         if desc:
@@ -146,11 +196,15 @@ def create_pdf(filename: str, worklet: Any):
 
         challenge = safe_get(worklet, FIELD_KEYS["challenge_use_case"])
         if challenge:
-            elements.append(Paragraph(f"<b>Challenge / Use Case:</b> {challenge}", normal_style))
+            elements.append(
+                Paragraph(f"<b>Challenge / Use Case:</b> {challenge}", normal_style)
+            )
 
         deliverables = safe_get(worklet, FIELD_KEYS["deliverables"])
         if deliverables:
-            elements.append(Paragraph(f"<b>Deliverables:</b> {deliverables}", normal_style))
+            elements.append(
+                Paragraph(f"<b>Deliverables:</b> {deliverables}", normal_style)
+            )
 
         # KPIs (list)
         raw_kpis = safe_get(worklet, FIELD_KEYS["kpis"])
@@ -173,11 +227,15 @@ def create_pdf(filename: str, worklet: Any):
         # Infra & Tech Stack
         infra = safe_get(worklet, FIELD_KEYS["infrastructure_requirements"])
         if infra:
-            elements.append(Paragraph(f"<b>Infrastructure Requirements:</b> {infra}", normal_style))
+            elements.append(
+                Paragraph(f"<b>Infrastructure Requirements:</b> {infra}", normal_style)
+            )
 
         tech = safe_get(worklet, FIELD_KEYS["tech_stack"])
         if tech:
-            elements.append(Paragraph(f"<b>Tentative Tech Stack:</b> {tech}", normal_style))
+            elements.append(
+                Paragraph(f"<b>Tentative Tech Stack:</b> {tech}", normal_style)
+            )
 
         # Milestones (dict)
         milestones = safe_get(worklet, FIELD_KEYS["milestones"])
@@ -186,7 +244,9 @@ def create_pdf(filename: str, worklet: Any):
             # Prefer M2/M4/M6 ordering if present
             for key in ("M2", "M4", "M6"):
                 if key in milestones and milestones[key] not in (None, ""):
-                    elements.append(Paragraph(f"• {key}: {milestones[key]}", bullet_style))
+                    elements.append(
+                        Paragraph(f"• {key}: {milestones[key]}", bullet_style)
+                    )
             # Add any other milestones
             for k, v in milestones.items():
                 if k not in ("M2", "M4", "M6") and v not in (None, ""):
@@ -196,20 +256,31 @@ def create_pdf(filename: str, worklet: Any):
         raw_refs = safe_get(worklet, FIELD_KEYS["references"]) or []
         refs = ensure_list(raw_refs)
         if refs:
-            elements.append(Paragraph("<b>Reference Work:</b>", normal_style))
+            elements.append(Paragraph("<b>References:</b>", normal_style))
             for ref in refs:
                 # Support both dict and object forms
                 title_r = extract_reference_field(ref, ["title", "Title"])
                 link_r = extract_reference_field(ref, ["link", "Link", "url", "URL"])
-                desc_r = extract_reference_field(ref, ["description", "Description", "abstract"])
+                desc_r = extract_reference_field(
+                    ref, ["description", "Description", "abstract"]
+                )
                 tag_r = extract_reference_field(ref, ["tag", "Tag", "source"])
 
                 link_part = f' <a href="{link_r}">{link_r}</a>' if link_r else ""
                 desc_part = f" - {desc_r}" if desc_r else ""
                 tag_part = f" ({tag_r})" if tag_r else ""
-                
+
                 # Compose a compact paragraph
-                composed = " ".join(part for part in [f"{title_r}" if title_r else None, link_part, desc_part, tag_part] if part)
+                composed = " ".join(
+                    part
+                    for part in [
+                        f"{title_r}" if title_r else None,
+                        link_part,
+                        desc_part,
+                        tag_part,
+                    ]
+                    if part
+                )
                 if composed:
                     elements.append(Paragraph(composed, bullet_style))
                 else:
@@ -218,7 +289,9 @@ def create_pdf(filename: str, worklet: Any):
 
         # If no elements were added, add a minimal notice so the PDF is not blank
         if not elements:
-            elements.append(Paragraph("No content available for this worklet.", normal_style))
+            elements.append(
+                Paragraph("No content available for this worklet.", normal_style)
+            )
 
         frame.addFromList(elements, pdf)
         pdf.save()
@@ -270,11 +343,18 @@ def create_ppt(output_filename: str, worklet: Any):
                 top += 0.6 + gap
 
         # Core textual fields (add if present)
-        for field_key in ("problem_statement", "description", "challenge_use_case", "deliverables"):
+        for field_key in (
+            "problem_statement",
+            "description",
+            "challenge_use_case",
+            "deliverables",
+        ):
             text = _text_for(FIELD_KEYS[field_key])
             if text:
                 try:
-                    top = add_textbox(slide, field_key.replace("_", " ").title(), text, top)
+                    top = add_textbox(
+                        slide, field_key.replace("_", " ").title(), text, top
+                    )
                 except NameError:
                     # Fallback simple textbox
                     left = Inches(0.5)
@@ -318,7 +398,9 @@ def create_ppt(output_filename: str, worklet: Any):
         raw_prereqs = safe_get(worklet, FIELD_KEYS["prerequisites"])
         prereqs = ensure_list(raw_prereqs)
         if prereqs:
-            preq_text = "\n".join([f"• {str(p)}" for p in prereqs if p not in (None, "")])
+            preq_text = "\n".join(
+                [f"• {str(p)}" for p in prereqs if p not in (None, "")]
+            )
             if preq_text:
                 try:
                     top = add_textbox(slide, "Prerequisites", preq_text, top)
@@ -373,10 +455,14 @@ def create_ppt(output_filename: str, worklet: Any):
         # Milestones
         milestones = safe_get(worklet, FIELD_KEYS["milestones"])
         if isinstance(milestones, dict) and milestones:
-            milestone_text = "\n".join([f"{k}: {v}" for k, v in milestones.items() if v not in (None, "")])
+            milestone_text = "\n".join(
+                [f"{k}: {v}" for k, v in milestones.items() if v not in (None, "")]
+            )
             if milestone_text:
                 try:
-                    top = add_textbox(slide, "Milestones (6 months)", milestone_text, top)
+                    top = add_textbox(
+                        slide, "Milestones (6 months)", milestone_text, top
+                    )
                 except NameError:
                     left = Inches(0.5)
                     top_inch = Inches(top)
@@ -412,14 +498,16 @@ def create_ppt(output_filename: str, worklet: Any):
             title_run = title_para.add_run()
             title_run.font.size = Pt(16)
             title_run.font.bold = True
-            title_run.font.name = 'Calibri'
+            title_run.font.name = "Calibri"
             title_run.font.color.rgb = RGBColor(0x00, 0x66, 0xCC)
-            title_run.text = "Reference Work:"
+            title_run.text = "References:"
 
             for ref in refs:
                 r_title = extract_reference_field(ref, ["title", "Title"])
                 r_link = extract_reference_field(ref, ["link", "Link", "url", "URL"])
-                r_desc = extract_reference_field(ref, ["description", "Description", "abstract"])
+                r_desc = extract_reference_field(
+                    ref, ["description", "Description", "abstract"]
+                )
                 r_tag = extract_reference_field(ref, ["tag", "Tag", "source"])
 
                 # Compose display text
@@ -437,7 +525,7 @@ def create_ppt(output_filename: str, worklet: Any):
                 run = p.add_run()
                 run.text = f"• {display_text}"
                 run.font.size = Pt(14)
-                run.font.name = 'Calibri'
+                run.font.name = "Calibri"
                 run.font.color.rgb = RGBColor(0, 102, 204)
 
                 # set hyperlink if link available
@@ -457,23 +545,26 @@ def create_ppt(output_filename: str, worklet: Any):
     except Exception as e:
         print(f"Failed to generate PPT {output_filename}: {e}")
 
+
 def estimate_height_wrapped_content(text, chars_per_line=100, line_height_pt=18):
     lines = 0
-    for para in text.split('\n'):
+    for para in text.split("\n"):
         para = para.strip()
         if not para:
             continue
         lines += max(1, int(len(para) / chars_per_line) + 1)
     return Pt(lines * line_height_pt).inches
 
+
 def estimate_height_wrapped_Title(text, chars_per_line=65, line_height_pt=20):
     lines = 0
-    for para in text.split('\n'):
+    for para in text.split("\n"):
         para = para.strip()
         if not para:
             continue
         lines += max(1, int(len(para) / chars_per_line) + 1)
     return Pt(lines * line_height_pt).inches
+
 
 def add_textbox(slide, title, content, top_inch):
     left = Inches(0.5)
@@ -492,15 +583,16 @@ def add_textbox(slide, title, content, top_inch):
     run_title.text = f"{title}:\n"
     run_title.font.size = Pt(16)
     run_title.font.bold = True
-    run_title.font.name = 'Calibri'
+    run_title.font.name = "Calibri"
     run_title.font.color.rgb = RGBColor(0x00, 0x66, 0xCC)
 
     run_content = p.add_run()
     run_content.text = content
     run_content.font.size = Pt(15)
-    run_content.font.name = 'Calibri'
+    run_content.font.name = "Calibri"
 
     return top_inch + height + gap
+
 
 def add_textbox_Title(slide, title, content, top_inch):
     left = Inches(0.5)
@@ -518,16 +610,15 @@ def add_textbox_Title(slide, title, content, top_inch):
     run_title = p.add_run()
     run_title.text = f"{title}: "
     run_title.font.size = Pt(20)
-    run_title.font.name = 'Calibri'
+    run_title.font.name = "Calibri"
     run_title.font.bold = True
     run_title.font.color.rgb = RGBColor(0x00, 0x66, 0xCC)
 
     run_content = p.add_run()
     run_content.text = content
     run_content.font.size = Pt(20)
-    run_content.font.name = 'Calibri'
+    run_content.font.name = "Calibri"
     run_content.font.bold = True
     run_content.font.color.rgb = RGBColor(0x00, 0x66, 0xCC)
 
-    return top_inch +height+ gap
-
+    return top_inch + height + gap

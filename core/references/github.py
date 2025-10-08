@@ -37,7 +37,6 @@ def get_github_references(keyword):
 
         return result
     else:
-        print(f"Error: {response.status_code} - {response.text}")
         return []
 
 

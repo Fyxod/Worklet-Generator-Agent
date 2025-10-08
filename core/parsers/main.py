@@ -39,14 +39,12 @@ async def extract_document(path, title="Untitled", file_name=None,  thread_id=No
     # --- Handle standalone images ---
     if ext in IMAGE_EXTENSIONS:
         try:
-            await sio.emit(f"{thread_id}/progress", {"message": f"{title} is an image, extracting text..."})
             text = await image_parser(file_path)
         except Exception as e:
             print(f"Error processing image {file_name}: {str(e)}")
             return None
 
         doc_id = str(uuid.uuid4())
-        await sio.emit(f"{thread_id}/progress", {"message": f"processed {file_name} successfully"})
         end_time = time.time()
         print(f"Time taken to process {file_name} main image: {end_time - start_time} seconds")
         return Document(
@@ -114,9 +112,6 @@ async def extract_document(path, title="Untitled", file_name=None,  thread_id=No
                 page_text = page_text.replace(placeholder, image_text, 1)
 
             doc_id = str(uuid.uuid4())
-            await sio.emit(f"{thread_id}/progress", {
-                "message": f"Processed {file_name} (Markdown) successfully"
-            })
 
             return Document(
                 id=doc_id,
@@ -137,7 +132,7 @@ async def extract_document(path, title="Untitled", file_name=None,  thread_id=No
         pages = []
         combined_texts = []
         ocr_tasks = {}
-        image_dir = f"data/{thread_id}/threads/{thread_id}/images/{name}"
+        image_dir = f"data/threads/{thread_id}/images/{name}"
         os.makedirs(image_dir, exist_ok=True)
 
         for slide_number, slide in enumerate(prs.slides, start=1):
@@ -185,7 +180,6 @@ async def extract_document(path, title="Untitled", file_name=None,  thread_id=No
             combined_texts = [txt.replace(placeholder, image_text, 1) for txt in combined_texts]
 
         doc_id = str(uuid.uuid4())
-        await sio.emit(f"{user_id}/progress", {"message": f"Processing {title} successfully..."})
         end_time = time.time()
         print(f"Time taken to process {title} successfully: {end_time - start_time} seconds")
         return Document(
@@ -270,7 +264,6 @@ async def extract_document(path, title="Untitled", file_name=None,  thread_id=No
         combined_texts = [txt.replace(placeholder, image_text, 1) for txt in combined_texts]
 
     doc_id = str(uuid.uuid4())
-    await sio.emit(f"{user_id}/progress", {"message": f"Processing {title} successfully..."})
     end_time = time.time()
     print(f"Time taken to process {title} successfully: {end_time - start_time} seconds")
     return Document(

@@ -19,6 +19,9 @@ resources
 latest_generated.json
 google_scholar_organic_results_data.json
 parthenv
+node_modules
+data
+debug
 .Python
 build/
 develop-eggs/
