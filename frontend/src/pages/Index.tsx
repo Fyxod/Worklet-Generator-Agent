@@ -10,6 +10,7 @@ import { ThreadDetails } from '@/components/ThreadDetails';
 import { Thread, DomainsKeywords, ProgressMessage } from '@/types/thread';
 import { getSocket } from '@/lib/socket';
 import { toast } from 'sonner';
+import { API_URL } from '@/config';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -43,9 +44,9 @@ const Index = () => {
 
   const fetchThreads = async () => {
     try {
-      const response = await fetch('/thread/all');
+      const response = await fetch(`${API_URL}/thread/all`);
       const data = await response.json();
-      setThreads(data);
+      setThreads(data.threads || []);
     } catch (error) {
       console.error('Error fetching threads:', error);
       toast.error('Failed to fetch threads');
@@ -54,7 +55,7 @@ const Index = () => {
 
   const fetchThread = async (id: string) => {
     try {
-      const response = await fetch(`/thread/${id}`);
+      const response = await fetch(`${API_URL}/thread/${id}`);
       const data = await response.json();
       setSelectedThread(data);
       
@@ -108,15 +109,21 @@ const Index = () => {
     setGeneratedFiles([]);
     setupSocketListeners(newThreadId);
 
-    try {
-      const response = await fetch('/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          thread_id: newThreadId,
-          ...formData,
-        }),
-      });
+    const body = new FormData();
+    body.append("thread_id", newThreadId);
+    body.append("thread_name", formData.thread_name);
+    body.append("custom_prompt", formData.custom_prompt);
+    body.append("count", formData.count.toString());
+    body.append("links", JSON.stringify(formData.links));
+    
+    formData.files.forEach((file: File) => body.append("files", file));
+
+
+  try {
+    const response = await fetch(`${API_URL}/generate`, {
+      method: "POST",
+      body,
+    });
 
       if (response.ok) {
         const data = await response.json();

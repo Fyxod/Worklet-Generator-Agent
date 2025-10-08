@@ -21,7 +21,7 @@ export const ThreadForm = ({ onGenerate }: ThreadFormProps) => {
   const [customPrompt, setCustomPrompt] = useState('');
   const [links, setLinks] = useState<string[]>(['']);
   const [files, setFiles] = useState<File[]>([]);
-  const [count, setCount] = useState(1);
+  const [count, setCount] = useState(5);
 
   const addLink = () => {
     setLinks([...links, '']);

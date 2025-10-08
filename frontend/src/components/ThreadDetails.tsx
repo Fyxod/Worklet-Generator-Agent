@@ -9,6 +9,7 @@ interface ThreadDetailsProps {
 }
 
 export const ThreadDetails = ({ thread, generatedFiles }: ThreadDetailsProps) => {
+  console.log('ThreadDetails rendered with thread:', thread);
   return (
     <div className="space-y-6 p-6">
       <Card className="p-6 bg-card border-border space-y-4">
