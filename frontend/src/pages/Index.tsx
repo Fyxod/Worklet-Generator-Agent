@@ -7,7 +7,7 @@ import { ProgressBar } from '@/components/ProgressBar';
 import { DomainKeywordModal } from '@/components/DomainKeywordModal';
 import { WebQueryModal } from '@/components/WebQueryModal';
 import { ThreadDetails } from '@/components/ThreadDetails';
-import { Thread, DomainsKeywords, ProgressMessage } from '@/types/thread';
+import { Thread, DomainsKeywords, ProgressMessage, Worklet } from '@/types/thread';
 import { getSocket } from '@/lib/socket';
 import { toast } from 'sonner';
 import { API_URL } from '@/config';
@@ -21,7 +21,7 @@ const Index = () => {
   const [selectedThread, setSelectedThread] = useState<Thread | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [progressMessages, setProgressMessages] = useState<ProgressMessage[]>([]);
-  const [worklets, setWorklets] = useState<string[]>([]);
+  const [worklets, setWorklets] = useState<Worklet[]>([]);
   
   const [domainKeywordModal, setDomainKeywordModal] = useState<{
     open: boolean;
@@ -66,7 +66,7 @@ const Index = () => {
       if (!data.generated) {
         setupSocketListeners(id);
       } else {
-        setWorklets(data.worklets || []);
+  setWorklets(data.worklets || []);
       }
     } catch (error) {
       console.error('Error fetching thread:', error);
@@ -91,8 +91,9 @@ const Index = () => {
       setWebQueryModal({ open: true, queries: data.queries });
     });
 
-    socket.on(`${id}/file_generated`, (data: { filename: string }) => {
-      setWorklets(prev => [...prev, data.filename]);
+    socket.on(`${id}/file_generated`, (data: { worklet: Worklet }) => {
+      // Backend now should emit the full worklet object
+      setWorklets(prev => [...prev, data.worklet]);
     });
   };
 
@@ -129,7 +130,7 @@ const Index = () => {
       count: formData.count,
       generated: false,
       created_at: new Date().toISOString(),
-      worklets: [] as string[],
+  worklets: [] as Worklet[],
       local: true,
     };
 
@@ -163,7 +164,7 @@ const Index = () => {
       }
 
   const data = await response.json();
-      setWorklets(data.worklets || []);
+  setWorklets(data.worklets || []);
       // Mark thread as generated & not local anymore so the progress bar disappears
       setSelectedThread(prev => prev ? { 
         ...prev,

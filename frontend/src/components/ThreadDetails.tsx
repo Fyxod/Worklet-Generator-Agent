@@ -1,15 +1,45 @@
 import { Download, FileIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Thread } from '@/types/thread';
+import { Thread, Worklet } from '@/types/thread';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { API_URL } from '@/config';
+import { useState } from 'react';
 
 interface ThreadDetailsProps {
   thread: Thread;
-  worklets: string[];
+  worklets: Worklet[];
 }
 
 export const ThreadDetails = ({ thread, worklets }: ThreadDetailsProps) => {
-  console.log('ThreadDetails rendered with thread:', thread);
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<Worklet | null>(null);
+
+  const handleOpenWorklet = (w: Worklet) => {
+    setSelected(w);
+    setOpen(true);
+  };
+
+  const handleDownload = async (type: 'pdf' | 'ppt') => {
+    if (!selected) return;
+    try {
+      const res = await fetch(`${API_URL}/${thread.thread_id}/download/${selected.worklet_id}/${type}`);
+      if (!res.ok) throw new Error('Failed to download');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${selected.title}.${type}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <div className="space-y-6 p-6">
       <Card className="p-6 bg-card border-border space-y-4">
@@ -79,26 +109,118 @@ export const ThreadDetails = ({ thread, worklets }: ThreadDetailsProps) => {
             <h3 className="text-xl font-semibold text-foreground">Generated Files</h3>
             <Button
               className="gradient-accent hover:opacity-90 transition-smooth"
+              disabled
             >
               <Download className="h-4 w-4 mr-2" />
               Download All
             </Button>
+            {/* TODO: Implement bulk download endpoint when backend provides specification */}
           </div>
           
           <div className="grid grid-cols-2 gap-3">
-            {worklets.map((file, index) => (
+            {worklets.map((w) => (
               <Button
-                key={index}
+                key={w.worklet_id}
                 variant="outline"
                 className="border-border hover:border-primary transition-smooth justify-start"
+                onClick={() => handleOpenWorklet(w)}
               >
                 <FileIcon className="h-4 w-4 mr-2" />
-                {file}
+                {w.title}
               </Button>
             ))}
           </div>
         </Card>
       )}
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh]">
+          {selected && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-2xl">{selected.title}</DialogTitle>
+              </DialogHeader>
+              <ScrollArea className="pr-4 h-[60vh]">
+                <div className="space-y-4 text-sm">
+                  <DetailField label="Problem Statement" value={selected.problem_statement} />
+                  <DetailField label="Description" value={selected.description} />
+                  <DetailField label="Challenge / Use Case" value={selected.challenge_use_case} />
+                  <DetailField label="Deliverables" value={selected.deliverables} />
+                  <ArrayField label="KPIs" values={selected.kpis} />
+                  <ArrayField label="Prerequisites" values={selected.prerequisites} />
+                  <DetailField label="Infrastructure Requirements" value={selected.infrastructure_requirements} />
+                  <DetailField label="Tech Stack" value={selected.tech_stack} />
+                  <MilestonesField milestones={selected.milestones} />
+                  <ReferencesField references={selected.references} />
+                </div>
+              </ScrollArea>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => handleDownload('pdf')}>
+                  <Download className="h-4 w-4 mr-1" /> PDF
+                </Button>
+                <Button onClick={() => handleDownload('ppt')}>
+                  <Download className="h-4 w-4 mr-1" /> PPT
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
+
+// Helper subcomponents
+const DetailField = ({ label, value }: { label: string; value: string }) => (
+  <div>
+    <p className="text-muted-foreground font-medium mb-1">{label}</p>
+    <p className="whitespace-pre-wrap leading-relaxed">{value}</p>
+  </div>
+);
+
+const ArrayField = ({ label, values }: { label: string; values: string[] }) => (
+  <div>
+    <p className="text-muted-foreground font-medium mb-1">{label}</p>
+    <ul className="list-disc list-inside space-y-1">
+      {values.map((v, i) => (
+        <li key={i}>{v}</li>
+      ))}
+    </ul>
+  </div>
+);
+
+const MilestonesField = ({ milestones }: { milestones: Record<string, any> }) => (
+  <div>
+    <p className="text-muted-foreground font-medium mb-1">Milestones</p>
+    <div className="space-y-2">
+      {Object.entries(milestones || {}).map(([k, v]) => (
+        <div key={k} className="border border-border rounded p-2">
+          <p className="text-sm font-semibold mb-1">{k}</p>
+          <pre className="text-xs whitespace-pre-wrap">{typeof v === 'string' ? v : JSON.stringify(v, null, 2)}</pre>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+const ReferencesField = ({ references }: { references: Worklet['references'] }) => (
+  <div>
+    <p className="text-muted-foreground font-medium mb-1">References</p>
+    <div className="space-y-3">
+      {references.map((r, i) => (
+        <div key={i} className="border border-border rounded p-3">
+          <a
+            href={r.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-primary hover:underline"
+          >
+            {r.title}
+          </a>
+          <p className="text-xs mt-1 mb-1">{r.description}</p>
+          <span className="inline-block text-[10px] uppercase tracking-wide bg-muted px-2 py-0.5 rounded">{r.tag}</span>
+        </div>
+      ))}
+    </div>
+  </div>
+);
