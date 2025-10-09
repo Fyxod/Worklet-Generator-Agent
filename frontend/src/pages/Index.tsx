@@ -292,6 +292,28 @@ const Index = () => {
     setWorklets([]);
   };
 
+  const handleDeleteThread = async (id: string) => {
+    try {
+      const res = await fetch(`${API_URL}/thread/delete/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`Failed to delete thread (status ${res.status})`);
+      setThreads(prev => prev.filter(t => t.thread_id !== id));
+      // Clean stores
+      setProgressStore(prev => { const { [id]: _, ...rest } = prev; return rest; });
+      setWorkletsStore(prev => { const { [id]: _, ...rest } = prev; return rest; });
+      // If deleted thread is selected or currently in route, navigate away
+      if (threadId === id) {
+        navigate('/');
+        setSelectedThread(null);
+        setProgressMessages([]);
+        setWorklets([]);
+      }
+      toast.success('Thread deleted');
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : 'Failed to delete thread');
+    }
+  };
+
   const handleDomainKeywordSubmit = (data: DomainsKeywords) => {
     if (!threadId) return;
     
@@ -375,6 +397,7 @@ const Index = () => {
         onNewThread={handleNewThread}
         onSelectThread={handleSelectThread}
         selectedThreadId={threadId || null}
+        onDeleteThread={handleDeleteThread}
       />
       
       <main className="flex-1 overflow-auto">

@@ -16,9 +16,8 @@ async def get_all_threads():
     return {"threads": list(threads)}
 
 
-@router.post("/delete")
-async def delete_thread(body: dict = Body(...)):
-    thread_id = body.get("thread_id")
+@router.delete("/delete/{thread_id}")
+async def delete_thread(thread_id: str):
     if not thread_id:
         return {"error": "Thread ID is required"}
 
