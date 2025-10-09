@@ -333,10 +333,27 @@ const Index = () => {
     if (!threadId) return;
     
     const socket = getSocket();
+    // Normalize queries more aggressively to avoid duplicates that differ only by
+    // case, extra internal whitespace, or trailing punctuation like '?', '!' or '.'.
+    const normalize = (q: string) =>
+      q
+        .trim()
+        .replace(/\s+/g, ' ')            // collapse whitespace
+        .replace(/[?!.,;:]+$/g, '')        // strip trailing punctuation that often varies
+        .toLowerCase();                    // case-insensitive comparison
+
     const seen = new Set<string>();
     const cleaned = queries
       .map(q => q.trim())
-      .filter(q => q.length > 0 && !seen.has(q.toLowerCase()) && (seen.add(q.toLowerCase()) || true));
+      .filter(q => q.length > 0)
+      .map(q => q.replace(/\s+/g, ' ')) // user-facing cleaned spacing
+      .filter(original => {
+        const key = normalize(original);
+        if (!key) return false;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
     socket.emit(`${threadId}/web_response`, { queries: cleaned });
     setWebQueryModal({ open: false, queries: [] });
   };
