@@ -52,6 +52,21 @@ const Index = () => {
     fetchThread(threadId);
   }, [threadId]);
 
+  // Ensure that navigating directly to /new (e.g., typing URL or page refresh) shows the form
+  useEffect(() => {
+    if (location.pathname === '/new') {
+      // Mirror the behavior of clicking the New Thread button
+      if (!showForm) setShowForm(true);
+      if (selectedThread) setSelectedThread(null);
+    } else {
+      // Leaving /new should hide the form unless explicitly re-opened
+      if (showForm && location.pathname !== '/new') {
+        setShowForm(false);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
+
   const fetchThreads = async () => {
     try {
       const response = await fetch(`${API_URL}/thread/all`);
@@ -115,17 +130,27 @@ const Index = () => {
       setProgressStore(prev => {
         const existing = prev[id] || [];
         const updated = [...existing, { message: data.message, timestamp }];
-        // If viewing this thread currently, reflect in UI state
-        if (threadId === id) setProgressMessages(updated);
         return { ...prev, [id]: updated };
+      });
+      // Update visible progress immediately if this thread is currently selected (route param may lag)
+      setProgressMessages(current => {
+        // If we are already displaying the latest message sequence, skip duplicate set
+        if (selectedThread?.thread_id === id) {
+          // Avoid recreating array if nothing changed
+          if (current.length && current[current.length - 1].timestamp === timestamp) return current;
+          return [...current, { message: data.message, timestamp }];
+        }
+        return current;
       });
     });
 
     socket.on(`${id}/topic_approval`, (data: DomainsKeywords) => {
+      console.log('Received topic approval request:', data);
       setDomainKeywordModal({ open: true, data });
     });
 
     socket.on(`${id}/web_approval`, (data: { queries: string[] }) => {
+      console.log('Received web approval request:', data);
       setWebQueryModal({ open: true, queries: data.queries });
     });
 
@@ -271,7 +296,36 @@ const Index = () => {
     if (!threadId) return;
     
     const socket = getSocket();
-    socket.emit(`${threadId}/topic_response`, data);
+    // Sanitize payload: remove empty/whitespace-only strings & trim duplicates (case-insensitive) preserving first occurrence
+    const sanitize = (arr: string[]) => {
+      const seen = new Set<string>();
+      const result: string[] = [];
+      for (const raw of arr) {
+        if (!raw) continue;
+        const trimmed = raw.trim();
+        if (!trimmed) continue;
+        const key = trimmed.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        result.push(trimmed);
+      }
+      return result;
+    };
+    const sanitized: DomainsKeywords = {
+      domains: {
+        worklet: sanitize(data.domains.worklet),
+        link: sanitize(data.domains.link),
+        custom_prompt: sanitize(data.domains.custom_prompt),
+        custom: sanitize(data.domains.custom),
+      },
+      keywords: {
+        worklet: sanitize(data.keywords.worklet),
+        link: sanitize(data.keywords.link),
+        custom_prompt: sanitize(data.keywords.custom_prompt),
+        custom: sanitize(data.keywords.custom),
+      },
+    };
+    socket.emit(`${threadId}/topic_response`, sanitized);
     setDomainKeywordModal({ open: false, data: null });
   };
 
@@ -279,9 +333,40 @@ const Index = () => {
     if (!threadId) return;
     
     const socket = getSocket();
-    socket.emit(`${threadId}/web_response`, { queries });
+    // Normalize queries more aggressively to avoid duplicates that differ only by
+    // case, extra internal whitespace, or trailing punctuation like '?', '!' or '.'.
+    const normalize = (q: string) =>
+      q
+        .trim()
+        .replace(/\s+/g, ' ')            // collapse whitespace
+        .replace(/[?!.,;:]+$/g, '')        // strip trailing punctuation that often varies
+        .toLowerCase();                    // case-insensitive comparison
+
+    const seen = new Set<string>();
+    const cleaned = queries
+      .map(q => q.trim())
+      .filter(q => q.length > 0)
+      .map(q => q.replace(/\s+/g, ' ')) // user-facing cleaned spacing
+      .filter(original => {
+        const key = normalize(original);
+        if (!key) return false;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    socket.emit(`${threadId}/web_response`, { queries: cleaned });
     setWebQueryModal({ open: false, queries: [] });
   };
+
+  // Hydrate progress messages if we navigated (threadId changed) and we already have stored progress
+  useEffect(() => {
+    if (threadId && progressStore[threadId] && progressStore[threadId].length > 0) {
+      // Only hydrate if current list is empty or behind
+      if (progressMessages.length < progressStore[threadId].length) {
+        setProgressMessages(progressStore[threadId]);
+      }
+    }
+  }, [threadId, progressStore]);
 
   return (
     <div className="flex h-screen w-full bg-background">

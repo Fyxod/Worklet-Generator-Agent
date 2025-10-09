@@ -20,3 +20,7 @@ class Worklet(BaseModel):
     tech_stack: str = Field(..., description="Tentative technology stack for the project idea")
     milestones: dict = Field(..., description="Milestones for the project idea over a 6-month period")
     references: List[Reference] = Field(..., description="List of relevant academic references or papers for the project idea")
+
+class SimpleDomainsKeywords(BaseModel):
+    domains: List[str] = Field(..., description="List of approved domains")
+    keywords: List[str] = Field(..., description="List of approved keywords")

@@ -1,3 +1,4 @@
+import json
 from dotenv import load_dotenv
 from tavily import TavilyClient
 import os
@@ -11,18 +12,21 @@ tavily_api_key = os.getenv("TAVILY_API_KEY")
 client = TavilyClient(api_key=tavily_api_key)
 
 
-async def extract_links(urls: list[str], depth: str = "advanced"):
+async def extract_links(urls: list[str], depth: str = "advanced") -> list:
     attempts = 0
     while attempts < 5:
         try:
-            return await asyncio.to_thread(
+            results = await asyncio.to_thread(
                 client.extract,
                 urls=urls,
                 extract_depth=depth,
             )
+            with open("debug/extracted_links.json", "w", encoding="utf-8") as f:
+                f.write(json.dumps(results, indent=2))
+            return results["results"]
         except Exception as e:
             attempts += 1
             print(f"Tavily search attempt {attempts} failed: {e}")
             if attempts >= 5:
-                return {}
+                return []
             await asyncio.sleep(1)

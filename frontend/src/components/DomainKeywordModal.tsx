@@ -13,32 +13,57 @@ interface DomainKeywordModalProps {
 }
 
 export const DomainKeywordModal = ({ open, data, onSubmit }: DomainKeywordModalProps) => {
-  const [domains, setDomains] = useState(data.domains);
-  const [keywords, setKeywords] = useState(data.keywords);
+  // Ensure we always have the expected shape (defensive in case of future optional changes)
+  const [domains, setDomains] = useState<DomainsKeywords['domains']>({
+    worklet: data.domains?.worklet ?? [],
+    link: data.domains?.link ?? [],
+    custom_prompt: data.domains?.custom_prompt ?? [],
+    custom: data.domains?.custom ?? []
+  });
+  const [keywords, setKeywords] = useState<DomainsKeywords['keywords']>({
+    worklet: data.keywords?.worklet ?? [],
+    link: data.keywords?.link ?? [],
+    custom_prompt: data.keywords?.custom_prompt ?? [],
+    custom: data.keywords?.custom ?? []
+  });
   const [showCustomDomains, setShowCustomDomains] = useState(false);
   const [showCustomKeywords, setShowCustomKeywords] = useState(false);
 
-  const removeItem = (category: 'domains' | 'keywords', section: string, index: number) => {
+  type SectionKey = 'worklet' | 'link' | 'custom_prompt' | 'custom';
+
+  const removeItem = (category: 'domains' | 'keywords', section: SectionKey, index: number) => {
     if (category === 'domains') {
-      const newDomains = { ...domains };
-      (newDomains as any)[section].splice(index, 1);
-      setDomains(newDomains);
+      setDomains(prev => {
+        const arr = prev[section];
+        if (!arr || index < 0 || index >= arr.length) return prev; // safety
+        return { ...prev, [section]: arr.filter((_, i) => i !== index) };
+      });
     } else {
-      const newKeywords = { ...keywords };
-      (newKeywords as any)[section].splice(index, 1);
-      setKeywords(newKeywords);
+      setKeywords(prev => {
+        const arr = prev[section];
+        if (!arr || index < 0 || index >= arr.length) return prev;
+        return { ...prev, [section]: arr.filter((_, i) => i !== index) };
+      });
     }
   };
 
-  const updateItem = (category: 'domains' | 'keywords', section: string, index: number, value: string) => {
+  const updateItem = (category: 'domains' | 'keywords', section: SectionKey, index: number, value: string) => {
     if (category === 'domains') {
-      const newDomains = { ...domains };
-      (newDomains as any)[section][index] = value;
-      setDomains(newDomains);
+      setDomains(prev => {
+        const arr = prev[section];
+        if (!arr || index < 0 || index >= arr.length) return prev;
+        const nextArr = [...arr];
+        nextArr[index] = value;
+        return { ...prev, [section]: nextArr };
+      });
     } else {
-      const newKeywords = { ...keywords };
-      (newKeywords as any)[section][index] = value;
-      setKeywords(newKeywords);
+      setKeywords(prev => {
+        const arr = prev[section];
+        if (!arr || index < 0 || index >= arr.length) return prev;
+        const nextArr = [...arr];
+        nextArr[index] = value;
+        return { ...prev, [section]: nextArr };
+      });
     }
   };
 
@@ -68,39 +93,42 @@ export const DomainKeywordModal = ({ open, data, onSubmit }: DomainKeywordModalP
     title: string,
     items: string[],
     category: 'domains' | 'keywords',
-    section: string
-  ) => (
-    <div className="space-y-2">
-      <h4 className="text-sm font-medium text-muted-foreground">{title}</h4>
+    section: SectionKey
+  ) => {
+    if (!items || items.length === 0) return null; // hide empty sections per requirement
+    return (
       <div className="space-y-2">
-        {items.map((item, index) => (
-          <div key={index} className="flex gap-2">
-            <Input
-              value={item}
-              onChange={(e) => updateItem(category, section, index, e.target.value)}
-              className="bg-input border-border"
-            />
-            <Button
-              type="button"
-              onClick={() => removeItem(category, section, index)}
-              size="icon"
-              variant="ghost"
-              className="hover:bg-destructive/10 hover:text-destructive"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        ))}
+        <h4 className="text-sm font-medium text-muted-foreground">{title}</h4>
+        <div className="space-y-2">
+          {items.map((item, index) => (
+            <div key={index} className="flex gap-2">
+              <Input
+                value={item}
+                onChange={(e) => updateItem(category, section, index, e.target.value)}
+                className="bg-input border-border"
+              />
+              <Button
+                type="button"
+                onClick={() => removeItem(category, section, index)}
+                size="icon"
+                variant="ghost"
+                className="hover:bg-destructive/10 hover:text-destructive"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <Dialog open={open}>
       <DialogContent className="max-w-4xl max-h-[80vh] bg-card border-border">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            Domains & Keywords
+            Approve Domains & Keywords
           </DialogTitle>
         </DialogHeader>
         
@@ -121,8 +149,8 @@ export const DomainKeywordModal = ({ open, data, onSubmit }: DomainKeywordModalP
                   Add Custom
                 </Button>
               </div>
-              {renderSection('Worklets', domains.worklet, 'domains', 'worklet_domains')}
-              {renderSection('Links', domains.link, 'domains', 'link_domains')}
+              {renderSection('Worklets', domains.worklet, 'domains', 'worklet')}
+              {renderSection('Links', domains.link, 'domains', 'link')}
               {renderSection('Custom Prompt', domains.custom_prompt, 'domains', 'custom_prompt')}
               {showCustomDomains && domains.custom && renderSection('Custom Domains', domains.custom, 'domains', 'custom')}
             </div>
@@ -142,10 +170,10 @@ export const DomainKeywordModal = ({ open, data, onSubmit }: DomainKeywordModalP
                   Add Custom
                 </Button>
               </div>
-              {renderSection('Worklets', keywords.worklet, 'keywords', 'worklet_keywords')}
-              {renderSection('Links', keywords.link, 'keywords', 'link_keywords')}
-              {renderSection('Custom Prompt', keywords.custom_prompt, 'keywords', 'custom_prompt_keywords')}
-              {showCustomKeywords && keywords.custom && renderSection('Custom Keywords', keywords.custom, 'keywords', 'custom_keywords')}
+              {renderSection('Worklets', keywords.worklet, 'keywords', 'worklet')}
+              {renderSection('Links', keywords.link, 'keywords', 'link')}
+              {renderSection('Custom Prompt', keywords.custom_prompt, 'keywords', 'custom_prompt')}
+              {showCustomKeywords && keywords.custom && renderSection('Custom Keywords', keywords.custom, 'keywords', 'custom')}
             </div>
           </div>
         </ScrollArea>

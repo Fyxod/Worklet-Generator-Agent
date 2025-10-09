@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,12 @@ interface WebQueryModalProps {
 
 export const WebQueryModal = ({ open, queries: initialQueries, onSubmit }: WebQueryModalProps) => {
   const [queries, setQueries] = useState<string[]>(initialQueries);
+
+  useEffect(() => {
+    if (open) {
+      setQueries(initialQueries);
+    }
+  }, [initialQueries, open]);
 
   const addQuery = () => {
     setQueries([...queries, '']);

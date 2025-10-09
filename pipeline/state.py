@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from core.llm.outputs import KeywordsExtractionResult, WorkletGenerationResult
 from core.constants import *
 from core.models.document import Documents
-from core.models.worklet import Worklet
+from core.models.worklet import Worklet, SimpleDomainsKeywords
 
 class AgentState(BaseModel):
     thread_id: str
@@ -15,8 +15,8 @@ class AgentState(BaseModel):
     custom_prompt: Optional[str] = None
     parsed_data: Optional[Documents] = None
     generation_output: Optional[WorkletGenerationResult] = None
-    keywords_domains: Optional[KeywordsExtractionResult] = None
-    links_data: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    keywords_domains: Optional[SimpleDomainsKeywords] = None
+    links_data: Optional[list[Any]] = Field(default_factory=list)
     web_search: Optional[bool] = False
     web_search_results: Optional[Union[Dict, List]] = Field(default_factory=list)
     worklets: Optional[List[Worklet]] = Field(default_factory=list)

@@ -1,6 +1,7 @@
 import asyncio
 import os
 import re
+import io
 
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -115,12 +116,8 @@ async def generate_file(worklet: Worklet, thread_id: str) -> None:
     Entrypoint to generate both PDF and PPT for a worklet.
     Accepts either a Pydantic Worklet instance or a legacy dict-like worklet.
     """
-    ppt_path = os.path.join(
-        "data/threads", thread_id, "generated_worklets/ppt"
-    )
-    pdf_path = os.path.join(
-        "data/threads", thread_id, "generated_worklets/pdf"
-    )
+    ppt_path = os.path.join("data/threads", thread_id, "generated_worklets/ppt")
+    pdf_path = os.path.join("data/threads", thread_id, "generated_worklets/pdf")
     os.makedirs(ppt_path, exist_ok=True)
     os.makedirs(pdf_path, exist_ok=True)
 
@@ -144,13 +141,17 @@ async def generate_file(worklet: Worklet, thread_id: str) -> None:
 # ---------------------------
 # PDF CREATION
 # ---------------------------
-def create_pdf(filename: str, worklet: Any):
+def create_pdf(filename: str, worklet: Worklet, in_memory: bool = False):
     """
     Create a PDF summarizing the worklet.
     This function is resilient to missing fields and supports both dict-like and attribute-like worklets.
     """
     try:
-        pdf = canvas.Canvas(filename, pagesize=CUSTOM_PAGE_SIZE)
+        if in_memory:
+            buffer = io.BytesIO()
+            pdf = canvas.Canvas(buffer, pagesize=CUSTOM_PAGE_SIZE)
+        else:
+            pdf = canvas.Canvas(filename, pagesize=CUSTOM_PAGE_SIZE)
         width, height = CUSTOM_PAGE_SIZE
 
         styles = getSampleStyleSheet()
@@ -286,7 +287,12 @@ def create_pdf(filename: str, worklet: Any):
 
         frame.addFromList(elements, pdf)
         pdf.save()
-        print(f"PDF generated: {filename}")
+        if in_memory:
+            data = buffer.getvalue()
+            buffer.close()
+            return data
+        else:
+            print(f"PDF generated: {filename}")
     except Exception as e:
         print(f"Failed to generate PDF {filename}: {e}")
 
@@ -294,7 +300,7 @@ def create_pdf(filename: str, worklet: Any):
 # ---------------------------
 # PPT CREATION
 # ---------------------------
-def create_ppt(output_filename: str, worklet: Any):
+def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
     """
     Create a single-slide PPTX summarizing the worklet.
     Robust to missing fields and supports dict-like and attribute-like worklets.
@@ -568,8 +574,15 @@ def create_ppt(output_filename: str, worklet: Any):
             top += height.inches + gap
 
         # Save PPT
-        prs.save(output_filename)
-        print(f"PPT generated: {output_filename}")
+        if in_memory:
+            buffer = io.BytesIO()
+            prs.save(buffer)
+            data = buffer.getvalue()
+            buffer.close()
+            return data
+        else:
+            prs.save(output_filename)
+            print(f"PPT generated: {output_filename}")
     except Exception as e:
         print(f"Failed to generate PPT {output_filename}: {e}")
 

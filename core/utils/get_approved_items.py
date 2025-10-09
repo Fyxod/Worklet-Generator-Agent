@@ -1,28 +1,30 @@
 import asyncio
-from app.socket_handler import is_client_connected, sio
+import json
+from app.socket_handler import sio
 
 pending_responses = {}
 
 
 async def get_approved_items(domains, keywords, thread_id: str):
 
-    if not is_client_connected(thread_id):
-        print(f"Client {thread_id} is not connected. Cannot proceed with query approval.")
-        return [], []
-
     future = asyncio.get_event_loop().create_future()
     pending_responses[thread_id] = future
 
     @sio.on(f"{thread_id}/topic_response")
-    async def handle_query_response(data):
+    async def handle_query_response(sid, data):
         if thread_id in pending_responses and not pending_responses[thread_id].done():
             pending_responses[thread_id].set_result(data)
 
     await sio.emit(f"{thread_id}/topic_approval", {"domains": domains, "keywords": keywords})
     try:
         response = await asyncio.wait_for(future, timeout=1800)  # 30 minutes timeout
+        
         with open("debug/approved_topics.txt", "w", encoding="utf-8") as f:
             f.write(str(response))
+
+        with open("debug/approved_topics.json", "w", encoding="utf-8") as f:
+            f.write(json.dumps(response, indent=2))
+
         print(response)
         approved_domains = response.get("domains", {}) if response else {}
         approved_keywords = response.get("keywords", {}) if response else {}
@@ -36,6 +38,7 @@ async def get_approved_items(domains, keywords, thread_id: str):
         approved_keywords = {}
     finally:
         pending_responses.pop(thread_id, None)
+        sio.handlers.get('/', {}).pop(f"{thread_id}/topic_response", None)
 
     final_domains = [
         domain

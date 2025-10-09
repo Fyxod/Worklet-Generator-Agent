@@ -54,12 +54,12 @@ def build_main_prompt(state: AgentState) -> str:
     return unified_problem_generation_prompt(
         count=state.count,
         keywords=(
-            state.keywords_domains.keywords.model_dump()
+            state.keywords_domains.keywords
             if state.keywords_domains
             else []
         ),
         domains=(
-            state.keywords_domains.domains.model_dump()
+            state.keywords_domains.domains
             if state.keywords_domains
             else []
         ),

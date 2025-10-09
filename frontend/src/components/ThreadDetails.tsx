@@ -26,7 +26,7 @@ export const ThreadDetails = ({ thread, worklets }: ThreadDetailsProps) => {
   const handleDownload = async (type: 'pdf' | 'ppt') => {
     if (!selected) return;
     try {
-      const res = await fetch(`${API_URL}/${thread.thread_id}/download/${selected.worklet_id}/${type}`);
+      const res = await fetch(`${API_URL}/thread/${thread.thread_id}/download/${selected.worklet_id}/${type}`);
       if (!res.ok) throw new Error(`Failed to download ${type.toUpperCase()} for worklet`);
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -48,8 +48,16 @@ export const ThreadDetails = ({ thread, worklets }: ThreadDetailsProps) => {
     try {
       const res = await fetch(`${API_URL}/thread/${thread.thread_id}/download/all/${type}`);
       if (!res.ok) throw new Error(`Failed to download all worklets as ${type.toUpperCase()}`);
+
       const disposition = res.headers.get('Content-Disposition');
-      const suggestedName = disposition?.match(/filename="?([^";]+)"?/)?.[1] || `worklets.${type}`;
+      let suggestedName = disposition?.match(/filename="?([^";]+)"?/)?.[1];
+      if (!suggestedName) {
+        // Fallback filename pattern
+        suggestedName = `worklets-${type}-bundle.zip`;
+      } else if (!/\.zip$/i.test(suggestedName)) {
+        // Ensure .zip extension
+        suggestedName = suggestedName.replace(/\.[^.]+$/, '') + '.zip';
+      }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -59,7 +67,7 @@ export const ThreadDetails = ({ thread, worklets }: ThreadDetailsProps) => {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-      toast.success(`All worklets (${type.toUpperCase()}) downloaded`);
+      toast.success(`ZIP with all ${type.toUpperCase()} files downloaded`);
     } catch (e) {
       console.error(e);
       toast.error(e instanceof Error ? e.message : 'Bulk download failed');

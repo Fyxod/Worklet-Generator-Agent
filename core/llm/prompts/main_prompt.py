@@ -1,11 +1,11 @@
 def unified_problem_generation_prompt(
     worklet_data: str,
-    links_data: str,
+    links_data: list,
     web_search_results: str,
     web_search_used: bool,
     custom_prompt: str,
-    keywords: str,
-    domains: str,
+    keywords: list[str],
+    domains: list[str],
     count: int,
 ):
     """

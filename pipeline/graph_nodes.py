@@ -11,6 +11,7 @@ from pipeline.graph_helpers import (
 )
 from pipeline.state import AgentState
 from pipeline.tools.search import search_tavily as search_tool
+from core.models.worklet import SimpleDomainsKeywords
 
 # from core.constants import *
 from core.utils.generate_files import generate_file
@@ -41,8 +42,11 @@ from core.llm.prompts.reference_keyword_prompt import (
 from core.database import db
 from app.socket_handler import sio
 from core.utils.get_approved_items import get_approved_items
-
+from core.utils.get_approved_queries import get_approved_queries
+from core.utils.fix_dashes import fix_dashes
 os.makedirs("debug", exist_ok=True)
+
+
 # parallilize both of these
 async def process_input(state: AgentState) -> AgentState:
     print(state.links)
@@ -94,6 +98,10 @@ async def extract_keywords_domains(state: AgentState) -> AgentState:
     with open("debug/keywords_domains.json", "w", encoding="utf-8") as f:
         f.write(json.dumps(result.model_dump(), indent=2))
 
+    updated_domains, updated_keywords = await get_approved_items(
+        result.domains.model_dump(), result.keywords.model_dump(), state.thread_id
+    )
+    result = SimpleDomainsKeywords(domains=updated_domains, keywords=updated_keywords)
     state.keywords_domains = result
     print(f"Keyword extraction took {time.time() - s:.2f} seconds")
     return state
@@ -132,14 +140,16 @@ async def web_search(state: AgentState) -> AgentState:
         return state
 
     state.web_search = True
-    await sio.emit(
-        f"{state.thread_id}/status_update", {"message": "Web search invoked..."}
-    )
     s = time.time()
     queries = state.generation_output.web_search_queries
     if not queries:
         print("No web search queries provided, skipping web search.")
         return state
+
+    queries = await get_approved_queries(queries, state.thread_id)
+    await sio.emit(
+        f"{state.thread_id}/status_update", {"message": "Web search invoked..."}
+    )
 
     print(f"Performing web search for queries: {queries}")
     web_search_results = await parallel_search(queries)
@@ -188,7 +198,13 @@ async def references(state: AgentState) -> AgentState:
         references = await generate_references(keywords)
         with open(f"debug/references_{worklet.title}.json", "w", encoding="utf-8") as f:
             f.write(json.dumps([ref.model_dump() for ref in references], indent=2))
-        state.worklets.append(Worklet(**worklet.model_dump(), references=references, worklet_id=str(time.time())))
+        state.worklets.append(
+            Worklet(
+                **worklet.model_dump(),
+                references=references,
+                worklet_id=str(time.time()),
+            )
+        )
 
     print(f"Reference generation took {time.time() - s:.2f} seconds")
     return state
@@ -222,6 +238,7 @@ async def sort_references(state: AgentState) -> AgentState:
             worklet.references[i] for i in sorted_indices if i < len(worklet.references)
         ]
         worklet.references = sorted_references
+        worklet = fix_dashes(worklet)
         print(f"Sorted references for worklet '{worklet.title}': {sorted_indices}")
     return state
 
