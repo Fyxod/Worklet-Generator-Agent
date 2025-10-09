@@ -19,7 +19,7 @@ REFERENCE_SORT_LLM = GPULLMConfig(model=GPT_OSS_20B, port=PORT2)
 
 # Fallback LLM models
 # Used if SWITCHES["FALLBACK_TO_GEMINI"] = True
-FALLBACK_GEMINI_LLM = "gemini-2.0-flash"
+FALLBACK_GEMINI_MODEL = "gemini-2.0-flash"
 
 # Used if SWITCHES["FALLBACK_TO_OPENAI"] = True
 FALLBACK_OPENAI_MODEL = "gpt-4o-mini"

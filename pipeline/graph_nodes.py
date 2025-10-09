@@ -43,6 +43,7 @@ from core.database import db
 from app.socket_handler import sio
 from core.utils.get_approved_items import get_approved_items
 from core.utils.get_approved_queries import get_approved_queries
+from core.utils.fix_dashes import fix_dashes
 os.makedirs("debug", exist_ok=True)
 
 
@@ -237,6 +238,7 @@ async def sort_references(state: AgentState) -> AgentState:
             worklet.references[i] for i in sorted_indices if i < len(worklet.references)
         ]
         worklet.references = sorted_references
+        worklet = fix_dashes(worklet)
         print(f"Sorted references for worklet '{worklet.title}': {sorted_indices}")
     return state
 
