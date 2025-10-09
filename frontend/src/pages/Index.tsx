@@ -150,6 +150,7 @@ const Index = () => {
     });
 
     socket.on(`${id}/web_approval`, (data: { queries: string[] }) => {
+      console.log('Received web approval request:', data);
       setWebQueryModal({ open: true, queries: data.queries });
     });
 
@@ -295,7 +296,36 @@ const Index = () => {
     if (!threadId) return;
     
     const socket = getSocket();
-    socket.emit(`${threadId}/topic_response`, data);
+    // Sanitize payload: remove empty/whitespace-only strings & trim duplicates (case-insensitive) preserving first occurrence
+    const sanitize = (arr: string[]) => {
+      const seen = new Set<string>();
+      const result: string[] = [];
+      for (const raw of arr) {
+        if (!raw) continue;
+        const trimmed = raw.trim();
+        if (!trimmed) continue;
+        const key = trimmed.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        result.push(trimmed);
+      }
+      return result;
+    };
+    const sanitized: DomainsKeywords = {
+      domains: {
+        worklet: sanitize(data.domains.worklet),
+        link: sanitize(data.domains.link),
+        custom_prompt: sanitize(data.domains.custom_prompt),
+        custom: sanitize(data.domains.custom),
+      },
+      keywords: {
+        worklet: sanitize(data.keywords.worklet),
+        link: sanitize(data.keywords.link),
+        custom_prompt: sanitize(data.keywords.custom_prompt),
+        custom: sanitize(data.keywords.custom),
+      },
+    };
+    socket.emit(`${threadId}/topic_response`, sanitized);
     setDomainKeywordModal({ open: false, data: null });
   };
 
@@ -303,7 +333,11 @@ const Index = () => {
     if (!threadId) return;
     
     const socket = getSocket();
-    socket.emit(`${threadId}/web_response`, { queries });
+    const seen = new Set<string>();
+    const cleaned = queries
+      .map(q => q.trim())
+      .filter(q => q.length > 0 && !seen.has(q.toLowerCase()) && (seen.add(q.toLowerCase()) || true));
+    socket.emit(`${threadId}/web_response`, { queries: cleaned });
     setWebQueryModal({ open: false, queries: [] });
   };
 
