@@ -261,26 +261,22 @@ def create_pdf(filename: str, worklet: Any):
                 )
                 tag_r = extract_reference_field(ref, ["tag", "Tag", "source"])
 
-                link_part = f' <a href="{link_r}">{link_r}</a>' if link_r else ""
-                desc_part = f" - {desc_r}" if desc_r else ""
-                tag_part = f" ({tag_r})" if tag_r else ""
+                # Create reference bullet point with plain title and clickable "link"
+                if title_r and link_r:
+                    # Plain title followed by clickable "link" word
+                    composed = f'• {title_r} <a href="{link_r}" color="blue"><u>link</u></a>'
+                elif title_r:
+                    # Title without link
+                    composed = f"• {title_r}"
+                elif link_r:
+                    # Link without title - show clickable "link" word
+                    composed = f'• <a href="{link_r}" color="blue"><u>link</u></a>'
+                else:
+                    # Fallback to stringifying the reference
+                    composed = f"• {str(ref)}"
 
-                # Compose a compact paragraph
-                composed = " ".join(
-                    part
-                    for part in [
-                        f"{title_r}" if title_r else None,
-                        link_part,
-                        desc_part,
-                        tag_part,
-                    ]
-                    if part
-                )
                 if composed:
                     elements.append(Paragraph(composed, bullet_style))
-                else:
-                    # fallback: try to stringify the reference
-                    elements.append(Paragraph(f"• {str(ref)}", bullet_style))
 
         # If no elements were added, add a minimal notice so the PDF is not blank
         if not elements:
@@ -505,32 +501,69 @@ def create_ppt(output_filename: str, worklet: Any):
                 )
                 r_tag = extract_reference_field(ref, ["tag", "Tag", "source"])
 
-                # Compose display text
-                parts = []
-                if r_title:
-                    parts.append(r_title)
-                if r_desc:
-                    parts.append(r_desc)
-                if r_tag:
-                    parts.append(f"({r_tag})")
-                display_text = " - ".join(parts) if parts else str(ref)
-
                 p = tf.add_paragraph()
                 p.level = 1
-                run = p.add_run()
-                run.text = f"• {display_text}"
-                run.font.size = Pt(14)
-                run.font.name = "Calibri"
-                run.font.color.rgb = RGBColor(0, 102, 204)
+                
+                # Add bullet point
+                bullet_run = p.add_run()
+                bullet_run.text = "• "
+                bullet_run.font.size = Pt(14)
+                bullet_run.font.name = "Calibri"
+                bullet_run.font.color.rgb = RGBColor(0, 102, 204)
 
-                # set hyperlink if link available
-                if r_link:
+                # Add plain title with clickable "link" word
+                if r_title and r_link:
+                    # Add plain title
+                    title_run = p.add_run()
+                    title_run.text = r_title + " "
+                    title_run.font.size = Pt(14)
+                    title_run.font.name = "Calibri"
+                    title_run.font.color.rgb = RGBColor(0, 0, 0)  # Black for better readability
+                    
+                    # Add clickable "link" word
+                    link_run = p.add_run()
+                    link_run.text = "link"
+                    link_run.font.size = Pt(14)
+                    link_run.font.name = "Calibri"
+                    link_run.font.color.rgb = RGBColor(0, 102, 204)
+                    link_run.font.underline = True  # Make it look like a link
+                    
+                    # Set hyperlink on the "link" word
                     try:
-                        p.hyperlink.address = r_link
+                        link_run.hyperlink.address = r_link
                     except Exception:
-                        # some pptx builds do not allow hyperlink assignment on paragraph directly,
-                        # in that case we ignore hyperlink to keep robustness
+                        # If hyperlink setting fails, continue without it
                         pass
+
+                elif r_title:
+                    # Title without link
+                    title_run = p.add_run()
+                    title_run.text = r_title
+                    title_run.font.size = Pt(14)
+                    title_run.font.name = "Calibri"
+                    title_run.font.color.rgb = RGBColor(0, 0, 0)  # Black for better readability
+
+                elif r_link:
+                    # Link without title - show clickable "link" word
+                    link_run = p.add_run()
+                    link_run.text = "link"
+                    link_run.font.size = Pt(14)
+                    link_run.font.name = "Calibri"
+                    link_run.font.color.rgb = RGBColor(0, 102, 204)
+                    link_run.font.underline = True
+                    
+                    try:
+                        link_run.hyperlink.address = r_link
+                    except Exception:
+                        pass
+
+                else:
+                    # Fallback: show string representation
+                    fallback_run = p.add_run()
+                    fallback_run.text = str(ref)
+                    fallback_run.font.size = Pt(14)
+                    fallback_run.font.name = "Calibri"
+                    fallback_run.font.color.rgb = RGBColor(0, 102, 204)
 
             top += height.inches + gap
 
@@ -617,3 +650,107 @@ def add_textbox_Title(slide, title, content, top_inch):
     run_content.font.color.rgb = RGBColor(0x00, 0x66, 0xCC)
 
     return top_inch + height + gap
+
+sample = {
+  "worklets": [
+
+    {
+      "title": "Adaptive AI\u2011Driven Mouse for Mixed Reality",
+      "problem_statement": "Develop an AI\u2011driven adaptive mouse that dynamically adjusts polling rates, DPI, and button mapping in real\u2011time to optimize performance for mixed reality applications, addressing latency and ergonomics today.",
+      "description": "The surge of mixed\u2011reality platforms demands peripherals that can adjust to rapidly changing input requirements. Existing mice either run at fixed polling rates or require manual configuration, causing latency and ergonomic strain. This project fuses adaptive hardware with AI\u2011driven mapping to provide real\u2011time performance tuning while keeping power consumption low.",
+      "challenge_use_case": "A VR developer needs a mouse that can switch DPI and polling rates on the fly to match headset tracking precision, ensuring smooth interaction without manual tweaking.",
+      "deliverables": "Prototype hardware board, firmware with adaptive polling, AI model for mapping, user study report, and an open\u2011source SDK.",
+      "kpis": [
+        "Latency < 5\u202fms",
+        "DPI accuracy \u2265 95\u202f%",
+        "User satisfaction > 85\u202f%",
+        "Power consumption < 0.5\u202fW"
+      ],
+      "prerequisites": [
+        "Experience in embedded systems",
+        "Knowledge of USB HID protocol",
+        "Proficiency in C/C++",
+        "Familiarity with ML inference",
+        "Basic electronics skills",
+        "Access to prototyping tools"
+      ],
+      "infrastructure_requirements": "FPGA board, Raspberry Pi, 3D printer, laser cutter, power supply unit, oscilloscope.",
+      "tech_stack": "C++, TensorFlow Lite, PyTorch, USB HID, Linux",
+      "milestones": {
+        "M2": "Firmware prototype with adaptive polling",
+        "M4": "Integrate AI mapping model and conduct lab tests",
+        "M6": "Field test with VR developers and publish results"
+      },
+      "references": [
+        {
+          "title": " EnergiQ: A Prescriptive Large Language Model-Driven Intelligent Platform for Interpreting Appliance Energy Consumption Patterns",
+          "link": "https://www.mdpi.com/1424-8220/25/16/4911",
+          "description": "… management approaches in smart cities, where structured IoT … Within this context, this paper \npresents EnergiQ, a smart, LLM… , EnergiQ uses MQTT-based architecture optimized for low …",
+          "tag": "scholar"
+        },
+        {
+          "title": "Integration of LLMs in Smart Cities for Sustainable Energy Solutions",
+          "link": "https://www.igi-global.com/chapter/integration-of-llms-in-smart-cities-for-sustainable-energy-solutions/376000",
+          "description": "… for LLM fine- tuning, LLM embedding of power system- … based knowledge pool to improve \nLLM answers and LLMs in safety… to optimizing travel and mobility experiences in cities that are …",
+          "tag": "scholar"
+        },
+        {
+          "title": "The role of llms in sustainable smart cities: Applications, challenges, and future directions",
+          "link": "https://arxiv.org/abs/2402.14596",
+          "description": "… to sustain the dynamic pace of smart city developments by exploring the optimal solutions \nfor intelligent resource allocation that consider energy efficiency, packet reliability, and latency, …",
+          "tag": "scholar"
+        },
+        {
+          "title": "Optimizing energy efficiency in IoT networks for sustainable smart cities: a focus on energy-efficient communication protocols",
+          "link": "https://rans.nsps.org.ng/index.php/pnspsc/article/view/173",
+          "description": "… in optimizing energy consumption for IoT devices in smart cities [7]. These technologies offer \nlow-power, … In extensive smart city deployments, MQTT’s support for edge computing further …",
+          "tag": "scholar"
+        },
+        {
+          "title": "LLM Agents for Internet of Things (IoT) Applications",
+          "link": "https://openreview.net/forum?id=BikB3f8ByV",
+          "description": "… , architectural trends, and optimization techniques, and we discuss … LLM agents in other \nIoT domains suggest that integrating them into real-world smart cities can also improve energy …",
+          "tag": "scholar"
+        },
+        {
+          "title": " Smart Building Recommendations with LLMs: A Semantic Comparison Approach",
+          "link": "https://www.mdpi.com/2075-5309/15/13/2303",
+          "description": "… that optimize energy efficiency and occupant comfort in smart buildings… LLM-based \nrecommendation system can be integrated into existing BMS architectures via RESTful APIs or MQTT …",
+          "tag": "scholar"
+        },
+        {
+          "title": " Real-Time Traffic Flow Optimization Using Large Language Models and Reinforcement Learning for Smart Urban Mobility",
+          "link": "https://www.sciencedirect.com/science/article/pii/S156849462501230X",
+          "description": "… This paper introduces the LLM-RL Traffic Optimization Framework (LLM-RL-TOF). LLMs … \nthe LLM estimate bottlenecks, accidents, and traffic congestion. An RL agent uses LLM outputs …",
+          "tag": "scholar"
+        },
+        {
+          "title": "A Review on LLMs for IoT Ecosystem: State-of-the-art, Lightweight Models, Use Cases, Key Challenges, Future Directions",
+          "link": "https://www.techrxiv.org/doi/full/10.36227/techrxiv.174844330.01320055",
+          "description": "… applications, demonstrating predictive trajectory modeling in smart cities. Narang [38] reflects \non … toward optimal LLM deployment strategies across heterogeneous IoT ecosystems. …",
+          "tag": "scholar"
+        },
+        {
+          "title": "SensorsConnect: World Wide Web for Internet of Things",
+          "link": "https://ontariotechu.scholaris.ca/items/ae8fb02b-3cff-4738-aa4b-96834b35dc54/full",
+          "description": "… For example, smart cities based on connected things that can … Hence, using UIDI over the \nMQTT protocol enables IoT … an LLM model with a retrieval component that privileges LLM to …",
+          "tag": "scholar"
+        },
+        {
+          "title": "A survey on applications of large language model-driven digital twins for intelligent network optimization",
+          "link": "https://ieeexplore.ieee.org/abstract/document/10994494/",
+          "description": "… advantages of LLM-driven DT in network optimization, … simulations to optimize transportation \nsystems in smart cities. … optimizing and coordinating multi-vector energy systems in …",
+          "tag": "scholar"
+        }
+      ]
+    },
+    
+  ],
+  "web_search": False,
+  "web_search_queries": []
+}
+
+
+create_pdf("worklet1.pdf", sample["worklets"][0])
+create_ppt("worklet1.pptx", sample["worklets"][0])
+

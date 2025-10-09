@@ -2,6 +2,10 @@
 __pycache__/
 *.py[cod]
 *$py.class
+cpuvenv
+*.pptx
+*.pdf
+*.json
 
 #poetry
 # Distribution / packaging
