@@ -179,10 +179,12 @@ export const ThreadDetails = ({ thread, worklets }: ThreadDetailsProps) => {
           {selected && (
             <>
               <DialogHeader>
-                <DialogTitle className="text-2xl">{selected.title}</DialogTitle>
+                <DialogTitle className="text-2xl leading-tight [overflow-wrap:anywhere]">
+                  {selected.title}
+                </DialogTitle>
               </DialogHeader>
               <ScrollArea className="pr-4 h-[60vh]">
-                <div className="space-y-4 text-sm">
+                <div className="space-y-4 text-sm whitespace-pre-wrap [overflow-wrap:anywhere] max-w-full">
                   <DetailField label="Problem Statement" value={selected.problem_statement} />
                   <DetailField label="Description" value={selected.description} />
                   <DetailField label="Challenge / Use Case" value={selected.challenge_use_case} />
@@ -212,19 +214,36 @@ export const ThreadDetails = ({ thread, worklets }: ThreadDetailsProps) => {
 };
 
 // Helper subcomponents
-const DetailField = ({ label, value }: { label: string; value: string }) => (
-  <div>
-    <p className="text-muted-foreground font-medium mb-1">{label}</p>
-    <p className="whitespace-pre-wrap leading-relaxed">{value}</p>
-  </div>
-);
+const normalizeWrapText = (input: string) => {
+  // Replace characters that inhibit wrapping:
+  //  - NBSP (\u00A0)
+  //  - NARROW NBSP (\u202F)
+  //  - WORD JOINER (\u2060)
+  //  - ZERO WIDTH NO-BREAK SPACE / BOM (\uFEFF)
+  //  - NON-BREAKING HYPHEN (\u2011)
+  return (input ?? "")
+    .replace(/[\u00A0\u202F\u2060\uFEFF]/g, " ")
+    .replace(/[\u2011]/g, "-");
+};
+
+const DetailField = ({ label, value }: { label: string; value: string }) => {
+  const safe = normalizeWrapText(value ?? "");
+  return (
+    <div>
+      <p className="text-muted-foreground font-medium mb-1">{label}</p>
+      <p className="whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]">{safe}</p>
+    </div>
+  );
+};
 
 const ArrayField = ({ label, values }: { label: string; values: string[] }) => (
   <div>
     <p className="text-muted-foreground font-medium mb-1">{label}</p>
     <ul className="list-disc list-inside space-y-1">
       {values.map((v, i) => (
-        <li key={i}>{v}</li>
+        <li key={i} className="[overflow-wrap:anywhere]">
+          {normalizeWrapText(v ?? "")}
+        </li>
       ))}
     </ul>
   </div>
