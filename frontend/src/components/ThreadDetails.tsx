@@ -123,7 +123,7 @@ export const ThreadDetails = ({ thread, worklets }: ThreadDetailsProps) => {
                 {thread.files.map((file, index) => (
                   <div key={index} className="flex items-center gap-2 p-2 bg-muted rounded">
                     <FileIcon className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">{file.name}</span>
+                    <span className="text-sm">{file}</span>
                   </div>
                 ))}
               </div>

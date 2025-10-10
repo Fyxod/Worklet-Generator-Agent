@@ -1,4 +1,3 @@
-import json
 import asyncio
 import time
 from core.config import settings
@@ -30,13 +29,13 @@ API_KEYS = [
 ]
 
 openai_client = AsyncOpenAI(api_key=settings.OPENAI_API)
-MAX_RETRIES = 8
+MAX_RETRIES = 8  # Total attempts across all LLMs
 
 count = 0
 
 
 async def invoke_llm(
-    gpu_model,
+    ollama_model,
     response_schema,
     contents,
     port=11434,
@@ -44,12 +43,14 @@ async def invoke_llm(
 ):
     """
     Unified structured LLM invocation with retries and fallbacks:
-    - GPU server
+    - Local CPU
     - Gemini API
     - OpenAI API
     Each returns parsed structured data using the same logic.
     """
     global count
+
+    # Initialize the parser for structured output
     parser = PydanticOutputParser(pydantic_object=response_schema)
 
     prompt = f"""
@@ -63,25 +64,24 @@ async def invoke_llm(
     for attempt in range(1, MAX_RETRIES + 1):
         print(f"\n=== Attempt {attempt}/{MAX_RETRIES} ===")
 
-        # === 1. GPU SERVER ===
-        if gpu_model:
+        # === 1. Ollama CPU ===
+        if ollama_model:
             try:
-                print("Trying GPU server...")
-                gpu_llm = MyServerLLM(model=gpu_model, port=port)
+                print("Trying Ollama CPU...")
+                ollama_llm = MyServerLLM(model=ollama_model, port=port)
                 s = time.time()
-                llm_output = await asyncio.to_thread(gpu_llm._call, prompt)
+                llm_output = await asyncio.to_thread(ollama_llm._call, prompt)
                 e = time.time()
-                print(f"GPU LLM call took {e - s:.2f}s")
+                print(f"Ollama LLM call took {e - s:.2f}s")
                 structured = parser.parse(llm_output)
-                print("Success via GPU server")
+                print("Success via Ollama CPU")
                 return structured
             except Exception as e:
-                print(f"GPU server failed: {e}")
+                print(f"Ollama server failed: {e}")
 
         # === 2. GEMINI FALLBACK ===
         if SWITCHES["FALLBACK_TO_GEMINI"]:
             print("Falling back to Gemini...")
-            sanitized_schema = sanitize_schema(response_schema.model_json_schema())
 
             for _ in range(len(API_KEYS)):
                 api_key = API_KEYS[count % len(API_KEYS)]
@@ -97,7 +97,9 @@ async def invoke_llm(
                     )
 
                     if remove_thinking:
-                        config.thinking_config = genai.types.ThinkingConfig(thinking_budget=0)
+                        config.thinking_config = genai.types.ThinkingConfig(
+                            thinking_budget=0
+                        )
 
                     response = await asyncio.wait_for(
                         asyncio.to_thread(

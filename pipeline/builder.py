@@ -5,7 +5,7 @@ from pipeline.graph_nodes import (
     process_input,
     extract_keywords_domains,
     generate_worklets,
-    sort_references,
+    rank_references,
     web_search,
     references,
     router,
@@ -22,7 +22,7 @@ graph_builder.add_node(EXTRACT_KEYWORDS_DOMAINS, extract_keywords_domains)
 graph_builder.add_node(GENERATE_WORKLETS, generate_worklets)
 graph_builder.add_node(WEB_SEARCH, web_search)
 graph_builder.add_node(REFERENCES, references)
-graph_builder.add_node(SORT_REFERENCES, sort_references)
+graph_builder.add_node(RANK_REFERENCES, rank_references)
 graph_builder.add_node(GENERATE_FILES, generate_files)
 
 graph_builder.set_entry_point(PROCESS_INPUT)
@@ -36,8 +36,8 @@ graph_builder.add_conditional_edges(
 )
 
 graph_builder.add_edge(WEB_SEARCH, GENERATE_WORKLETS)
-graph_builder.add_edge(REFERENCES, SORT_REFERENCES)
-graph_builder.add_edge(SORT_REFERENCES, GENERATE_FILES)
+graph_builder.add_edge(REFERENCES, RANK_REFERENCES)
+graph_builder.add_edge(RANK_REFERENCES, GENERATE_FILES)
 graph_builder.add_edge(GENERATE_FILES, END)
 
 Pipeline = graph_builder.compile()

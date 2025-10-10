@@ -38,7 +38,7 @@ async def generate_references(keywords: ReferenceKeywordResult) -> list[Referenc
                         title=r.get("title", ""),
                         link=r.get("url", ""),
                         description=r.get("content", ""),
-                        tag="google",
+                        tag="web",
                     )
                 )
 

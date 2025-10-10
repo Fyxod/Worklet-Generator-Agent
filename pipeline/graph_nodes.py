@@ -1,8 +1,6 @@
 import json
 import time
 import os
-import aiofiles
-import asyncio
 
 from pipeline.graph_helpers import (
     build_extraction_prompt,
@@ -13,7 +11,6 @@ from pipeline.state import AgentState
 from pipeline.tools.search import search_tavily as search_tool
 from core.models.worklet import SimpleDomainsKeywords
 
-# from core.constants import *
 from core.utils.generate_files import generate_file
 from core.llm.client import invoke_llm
 from core.models.worklet import Worklet
@@ -23,8 +20,9 @@ from core.llm.outputs import (
     ReferenceKeywordResult,
     ReferenceSortingResult,
 )
+from core.utils.compress_prompt import compress_references
 from core.references.generate_references import generate_references
-from core.constants import WEB_SEARCH, REFERENCES
+from core.constants import WEB_SEARCH, REFERENCES, SWITCHES
 from core.constants import (
     KEYWORD_DOMAIN_EXTRACTION_LLM,
     WORKLET_GENERATOR_LLM,
@@ -44,10 +42,11 @@ from app.socket_handler import sio
 from core.utils.get_approved_items import get_approved_items
 from core.utils.get_approved_queries import get_approved_queries
 from core.utils.fix_dashes import fix_dashes
+
 os.makedirs("debug", exist_ok=True)
 
 
-# parallilize both of these
+# parallelize both of these
 async def process_input(state: AgentState) -> AgentState:
     print(state.links)
     print(type(state.links))
@@ -90,7 +89,7 @@ async def extract_keywords_domains(state: AgentState) -> AgentState:
     )
 
     result: KeywordsExtractionResult = await invoke_llm(
-        gpu_model=KEYWORD_DOMAIN_EXTRACTION_LLM.model,
+        ollama_model=KEYWORD_DOMAIN_EXTRACTION_LLM.model,
         response_schema=KeywordsExtractionResult,
         contents=prompt,
         port=KEYWORD_DOMAIN_EXTRACTION_LLM.port,
@@ -119,7 +118,7 @@ async def generate_worklets(state: AgentState) -> AgentState:
     )
 
     result: WorkletGenerationResult = await invoke_llm(
-        gpu_model=WORKLET_GENERATOR_LLM.model,
+        ollama_model=WORKLET_GENERATOR_LLM.model,
         response_schema=WorkletGenerationResult,
         contents=prompt,
         port=WORKLET_GENERATOR_LLM.port,
@@ -173,28 +172,34 @@ async def references(state: AgentState) -> AgentState:
             f"{state.thread_id}/status_update",
             {"message": f"Generating references for worklet: {worklet.title}..."},
         )
-        prompt = keyword_prompt(worklet.title or worklet.problem_statement)
-        try:
-            result: ReferenceKeywordResult = await invoke_llm(
-                gpu_model=REFERENCE_KEYWORD_LLM.model,
-                contents=prompt,
-                response_schema=ReferenceKeywordResult,
-                port=REFERENCE_KEYWORD_LLM.port,
-            )
-            keywords = result or ReferenceKeywordResult(
-                google_scholar_keyword=worklet.title, github_keyword=worklet.title
-            )
-            with open(
-                f"debug/reference_keyword_{worklet.title}.txt", "w", encoding="utf-8"
-            ) as f:
-                f.write(str(result.model_dump()))
-        except Exception as e:
-            print(
-                f"Error extracting reference keyword for worklet '{worklet.title}': {e}"
-            )
-            keywords = ReferenceKeywordResult(
-                google_scholar_keyword=worklet.title, github_keyword=worklet.title
-            )
+        default_keywords = ReferenceKeywordResult(
+            google_scholar_keyword=worklet.title, github_keyword=worklet.title
+        )
+        if SWITCHES["GENERATE_KEYWORD"]:
+            prompt = keyword_prompt(worklet.title or worklet.problem_statement)
+            try:
+                result: ReferenceKeywordResult = await invoke_llm(
+                    ollama_model=REFERENCE_KEYWORD_LLM.model,
+                    contents=prompt,
+                    response_schema=ReferenceKeywordResult,
+                    port=REFERENCE_KEYWORD_LLM.port,
+                )
+                keywords = result or default_keywords
+                
+                with open(
+                    f"debug/reference_keyword_{worklet.title}.txt",
+                    "w",
+                    encoding="utf-8",
+                ) as f:
+                    f.write(str(result.model_dump()))
+            except Exception as e:
+                print(
+                    f"Error extracting reference keyword for worklet '{worklet.title}': {e}"
+                )
+                keywords = default_keywords
+        else:
+            keywords = default_keywords
+
         references = await generate_references(keywords)
         with open(f"debug/references_{worklet.title}.json", "w", encoding="utf-8") as f:
             f.write(json.dumps([ref.model_dump() for ref in references], indent=2))
@@ -211,24 +216,29 @@ async def references(state: AgentState) -> AgentState:
 
 
 # remove this for the cpu version
-async def sort_references(state: AgentState) -> AgentState:
+async def rank_references(state: AgentState) -> AgentState:
+    if not SWITCHES["RANK_REFERENCES"]:
+        return state
+
     for worklet in state.worklets:
         await sio.emit(
             f"{state.thread_id}/status_update",
-            {"message": f"Sorting references for worklet: {worklet.title}..."},
+            {"message": f"Ranking references for worklet: {worklet.title}..."},
         )
         if not worklet.references or len(worklet.references) == 0:
             continue
 
+        modified_references = compress_references(worklet.references)
+
         references = {}
-        for idx, ref in enumerate(worklet.references):
+        for idx, ref in enumerate(modified_references):
             references[idx] = ref.model_dump()
         prompt = reference_sorting_prompt(
             title=worklet.title, description=worklet.description, references=references
         )
 
         result: ReferenceSortingResult = await invoke_llm(
-            gpu_model=REFERENCE_SORT_LLM.model,
+            ollama_model=REFERENCE_SORT_LLM.model,
             response_schema=ReferenceSortingResult,
             contents=prompt,
             port=REFERENCE_SORT_LLM.port,

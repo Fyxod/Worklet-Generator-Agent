@@ -83,7 +83,7 @@ def problem_generation_prompt(
                 "     • Publishable academic research\n"
                 "     • Patentable novelty\n\n"
                 "4. **Feasibility:**\n"
-                "   - Must be executable by Tier 1–2 Indian engineering colleges.\n"
+                "   - Must be executable by Tier 1-2 Indian engineering colleges.\n"
                 "   - Should use moderate infrastructure: open-source tools, limited cloud credits, GPUs, and public datasets.\n\n"
                 "5. **Web Enrichment:**\n"
                 "   - Use 2025 (or latest) benchmarks, tools, APIs, and frameworks.\n"
@@ -118,10 +118,10 @@ def problem_generation_prompt(
                 "[\n"
                 "  {\n"
                 "    \"Title\": \"<one-line title>\",\n"
-                "    \"Problem Statement\": \"<28–33 word summary>\",\n"
+                "    \"Problem Statement\": \"<28-33 word summary>\",\n"
                 "    \"Description\": \"<context/background, max 100 words>\",\n"
                 "    \"Challenge / Use Case\": \"<specific pain point or scenario>\",\n"
-                "    \"Deliverables\": \"<expected outputs – app, model, system, dataset, etc.>\",\n"
+                "    \"Deliverables\": \"<expected outputs - app, model, system, dataset, etc.>\",\n"
                 "    \"KPIs\": [\n"
                 "      \"<metric 1>\",\n"
                 "      \"<metric 2>\",\n"
@@ -146,7 +146,7 @@ def problem_generation_prompt(
                 "  }\n"
                 "]\n"
                 "```\n\n"
-                "⚠️ **Important:** Only output this JSON array — no preamble, explanation, or markdown formatting."
+                "**Important:** Only output this JSON array — no preamble, explanation, or markdown formatting."
             ),
         }
     )
