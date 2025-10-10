@@ -9,11 +9,6 @@ import pytesseract
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 async def image_parser(image_path: str, retries: int = 3) -> str:
-    """
-    Parse image text using Gemma vision API.
-    Falls back to Tesseract OCR if Gemma fails after `retries` attempts.
-    Always returns plain text or empty string if everything fails.
-    """
 
     def tesseract_parse() -> str:
         """Fallback OCR with Tesseract."""
