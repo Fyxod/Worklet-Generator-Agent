@@ -236,6 +236,13 @@ const DetailField = ({ label, value }: { label: string; value: string }) => {
   );
 };
 
+// const DetailField = ({ label, value }: { label: string; value: string }) => (
+//   <div>
+//     <p className="text-muted-foreground font-medium mb-1">{label}</p>
+//     <p className="whitespace-pre-wrap leading-relaxed">{value}</p>
+//   </div>
+// );
+
 const ArrayField = ({ label, values }: { label: string; values: string[] }) => (
   <div>
     <p className="text-muted-foreground font-medium mb-1">{label}</p>
