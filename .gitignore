@@ -22,6 +22,7 @@ dist/
 downloads/
 worklets/
 eggs/
+.v
 .eggs/
 lib64/
 parts/

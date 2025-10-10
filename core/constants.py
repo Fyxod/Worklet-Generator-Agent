@@ -11,7 +11,7 @@ SWITCHES = {
 
 PORT = 11434
 
-CPU_MODEL = "qwen3:4b"
+CPU_MODEL = "qwen3:8b"
 
 # Ollama LLM configurations
 KEYWORD_DOMAIN_EXTRACTION_LLM = OllamaLLMConfig(model=CPU_MODEL, port=PORT)
