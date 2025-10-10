@@ -120,12 +120,15 @@ export const ThreadDetails = ({ thread, worklets }: ThreadDetailsProps) => {
             <div>
               <p className="text-sm text-muted-foreground mb-2">Uploaded Files</p>
               <div className="space-y-2">
-                {thread.files.map((file, index) => (
+                {thread.files.map((file, index) => {
+                  const display = typeof file === 'string' ? file : (file as any)?.name || String(file);
+                  return (
                   <div key={index} className="flex items-center gap-2 p-2 bg-muted rounded">
                     <FileIcon className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">{file}</span>
+                    <span className="text-sm">{display}</span>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

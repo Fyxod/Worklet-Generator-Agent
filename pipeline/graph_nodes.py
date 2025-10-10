@@ -185,7 +185,7 @@ async def references(state: AgentState) -> AgentState:
                     port=REFERENCE_KEYWORD_LLM.port,
                 )
                 keywords = result or default_keywords
-                
+
                 with open(
                     f"debug/reference_keyword_{worklet.title}.txt",
                     "w",

@@ -5,7 +5,7 @@ SWITCHES = {
     "GENERATE_KEYWORDS_DOMAINS": True,  # Whether to extract keywords and domains from input
     "GENERATE_KEYWORD": False,  # Whether to generate appropriate keywords for reference search(uses worklet title as default otherwise)
     "RANK_REFERENCES": False,  # Whether to rank references based on relevance
-    "FALLBACK_TO_GEMINI": True,  # Fallback to Gemini if Ollama fails
+    "FALLBACK_TO_GEMINI": False,  # Fallback to Gemini if Ollama fails
     "FALLBACK_TO_OPENAI": False,  # Fallback to OpenAI if BOTH Ollama and Gemini fails
 }
 
