@@ -197,7 +197,8 @@ const Index = () => {
       thread_name: formData.thread_name,
       custom_prompt: formData.custom_prompt,
       links: formData.links,
-      files: formData.files,
+      // Store only filenames for optimistic UI to match Thread type and avoid rendering File objects
+      files: (formData.files || []).map((f: File) => f.name),
       count: formData.count,
       generated: false,
       created_at: new Date().toISOString(),

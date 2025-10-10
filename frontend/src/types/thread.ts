@@ -5,7 +5,7 @@ export interface Reference {
   link: string;
   /** Brief description or abstract of the academic reference or paper */
   description: string;
-  /** Tag indicating the source of the reference, e.g., 'google', 'scholar' */
+  /** Tag indicating the source of the reference, e.g., 'web', 'scholar' */
   tag: string;
 }
 
@@ -14,7 +14,7 @@ export interface Worklet {
   worklet_id: string;
   /** Title of the project idea */
   title: string;
-  /** Problem statement of the project idea (28–33 words) */
+  /** Problem statement of the project idea (28-33 words) */
   problem_statement: string;
   /** Description of the project idea (providing context/background, max 100 words) */
   description: string;
@@ -41,7 +41,7 @@ export interface Thread {
   thread_name: string;
   custom_prompt?: string;
   links?: string[];
-  files?: File[];
+  files?: string[];
   count: number;
   generated: boolean;
   created_at: string;
