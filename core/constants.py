@@ -2,7 +2,7 @@ from core.models.gpu_config import GPULLMConfig
 
 # SETTINGS
 SWITCHES = {
-    "FALLBACK_TO_GEMINI": False,  # Fallback to Gemini if Ollama fails
+    "FALLBACK_TO_GEMINI": True,  # Fallback to Gemini if Ollama fails
     "FALLBACK_TO_OPENAI": False,  # Fallback to OpenAI if BOTH Ollama and Gemini fails
 }
 

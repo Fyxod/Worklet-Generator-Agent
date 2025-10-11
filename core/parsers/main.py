@@ -202,7 +202,7 @@ async def extract_document(path, title="Untitled", file_name=None,  thread_id=No
         page_text = page.get_text("text")
 
         image_names = []
-        image_dir = f"data/{user_id}/threads/{thread_id}/images/{name}"
+        image_dir = f"data/threads/{thread_id}/images/{name}"
         os.makedirs(image_dir, exist_ok=True)
 
         # Extract embedded raster images
