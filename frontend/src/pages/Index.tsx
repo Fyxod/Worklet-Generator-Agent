@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Sidebar } from '@/components/Sidebar';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
@@ -28,6 +28,9 @@ const Index = () => {
   const [progressStore, setProgressStore] = useState<Record<string, ProgressMessage[]>>({});
   const [workletsStore, setWorkletsStore] = useState<Record<string, Worklet[]>>({});
   const [subscribedThreads, setSubscribedThreads] = useState<Set<string>>(new Set());
+
+
+  const currentThreadIdRef = useRef<string | null>(null);
   
   const [domainKeywordModal, setDomainKeywordModal] = useState<{
     open: boolean;
@@ -52,10 +55,13 @@ const Index = () => {
     fetchThread(threadId);
   }, [threadId]);
 
-  // Ensure that navigating directly to /new (e.g., typing URL or page refresh) shows the form
+  useEffect(() => {
+    currentThreadIdRef.current = threadId || null;
+  }, [threadId]);
+
+
   useEffect(() => {
     if (location.pathname === '/new') {
-      // Mirror the behavior of clicking the New Thread button
       if (!showForm) setShowForm(true);
       if (selectedThread) setSelectedThread(null);
     } else {
@@ -64,7 +70,6 @@ const Index = () => {
         setShowForm(false);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
   const fetchThreads = async () => {
@@ -94,8 +99,8 @@ const Index = () => {
 
       if (!data.generated) {
         setupSocketListeners(id);
-        // hydrate previous progress/worklets if they exist in store
-        setProgressMessages(progressStore[id] || []);
+    
+        setProgressMessages([]);
         setWorklets(workletsStore[id] || []);
       } else {
         if (data.worklets && data.worklets.length > 0) {
@@ -127,21 +132,20 @@ const Index = () => {
     socket.on(`${id}/status_update`, (data: { message: string }) => {
       const timestamp = Date.now();
       console.log(`[${new Date(timestamp).toISOString()}] Progress:`, data.message);
+      
       setProgressStore(prev => {
         const existing = prev[id] || [];
         const updated = [...existing, { message: data.message, timestamp }];
         return { ...prev, [id]: updated };
       });
-      // Update visible progress immediately if this thread is currently selected (route param may lag)
-      setProgressMessages(current => {
-        // If we are already displaying the latest message sequence, skip duplicate set
-        if (selectedThread?.thread_id === id) {
-          // Avoid recreating array if nothing changed
+
+  
+      if (currentThreadIdRef.current === id) {
+        setProgressMessages(current => {
           if (current.length && current[current.length - 1].timestamp === timestamp) return current;
           return [...current, { message: data.message, timestamp }];
-        }
-        return current;
-      });
+        });
+      }
     });
 
     socket.on(`${id}/topic_approval`, (data: DomainsKeywords) => {
@@ -193,7 +197,8 @@ const Index = () => {
       thread_name: formData.thread_name,
       custom_prompt: formData.custom_prompt,
       links: formData.links,
-      files: formData.files,
+      // Store only filenames for optimistic UI to match Thread type and avoid rendering File objects
+      files: (formData.files || []).map((f: File) => f.name),
       count: formData.count,
       generated: false,
       created_at: new Date().toISOString(),
@@ -259,9 +264,6 @@ const Index = () => {
       console.error('Error generating worklets:', error);
       toast.error('Failed to generate worklets');
 
-      // Revert to /new with previously entered form data preserved in form component state
-      // We store temporary state to allow the form to repopulate.
-      // Approach: pass state via navigation so ThreadForm can potentially use it (would require ThreadForm changes if we want auto-fill).
       navigate('/new', { state: { previousFormData } });
       setShowForm(true);
       setSelectedThread(null);
@@ -278,7 +280,10 @@ const Index = () => {
       setProgressStore(prev => ({ ...prev, [selectedThread.thread_id]: progressMessages }));
       setWorkletsStore(prev => ({ ...prev, [selectedThread.thread_id]: worklets }));
     }
+    
     setSelectedThread(null);
+    setProgressMessages([]);
+    setWorklets([]);
     setThreadLoading(true);
     navigate(`/${id}`);
   };
@@ -379,16 +384,18 @@ const Index = () => {
     socket.emit(`${threadId}/web_response`, { queries: cleaned });
     setWebQueryModal({ open: false, queries: [] });
   };
-
-  // Hydrate progress messages if we navigated (threadId changed) and we already have stored progress
+  
   useEffect(() => {
-    if (threadId && progressStore[threadId] && progressStore[threadId].length > 0) {
-      // Only hydrate if current list is empty or behind
+    if (!threadId) return;
+    const found = threads.find(t => t.thread_id === threadId);
+    if (!found) return;
+    
+    if (found.generated && progressStore[threadId] && progressStore[threadId].length > 0) {
       if (progressMessages.length < progressStore[threadId].length) {
         setProgressMessages(progressStore[threadId]);
       }
     }
-  }, [threadId, progressStore]);
+  }, [threadId, progressStore, threads]);
 
   return (
     <div className="flex h-screen w-full bg-background">

@@ -6,7 +6,7 @@ cpuvenv
 *.pptx
 *.pdf
 *.json
-
+.v
 #poetry
 # Distribution / packaging
 latest_generated.json

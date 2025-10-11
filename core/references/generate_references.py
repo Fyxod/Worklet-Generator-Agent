@@ -24,13 +24,14 @@ async def generate_references(keywords: ReferenceKeywordResult) -> list[Referenc
         webReferences = []
 
         if len(googleScholarReferences) == 0:
-            tool_results = search_tool(
+            tool_results = await search_tool(
                 query=keywords.google_scholar_keyword,
                 max_results=10,
                 depth="advanced",
                 include_answer=False,
                 include_favicon=False,
             )
+
             for r in tool_results.get("results", []):
                 webReferences.append(
                     Reference(

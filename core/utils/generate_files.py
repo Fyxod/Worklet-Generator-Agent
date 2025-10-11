@@ -663,5 +663,4 @@ def add_textbox_Title(slide, title, content, top_inch):
     run_content.font.color.rgb = RGBColor(0x00, 0x66, 0xCC)
 
     return top_inch + height + gap
-# Note: The add_textbox and add_textbox_Title functions estimate height based on content length to avoid overflow.
- 
+
