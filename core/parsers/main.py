@@ -192,6 +192,8 @@ async def extract_document(path, title="Untitled", file_name=None,  thread_id=No
         )
 
     # --- Handle PDFs ---
+    print(f"DEBUG: Trying to open PDF at {file_path}, exists={os.path.exists(file_path)}, size={os.path.getsize(file_path) if os.path.exists(file_path) else 'N/A'}")
+    # file_path = os.path.abspath(path)
     doc = fitz.open(file_path)
     pages = []
     combined_texts = []
