@@ -18,7 +18,7 @@ async def process_files(
     """
     Process a list of uploaded files:
     - Pass each file to the document parser.
-    - Store the parsed result as JSON in `data/{user_id}/threads/{thread_id}/parsed/`.
+    - Store the parsed result as JSON in `data/threads/{thread_id}/parsed/`.
     - Accumulate all parsed documents into a Documents object.
 
     Returns:
