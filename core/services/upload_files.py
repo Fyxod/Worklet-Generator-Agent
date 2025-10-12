@@ -7,12 +7,11 @@ import aiofiles
 
 async def upload_files(files, thread_id: str) -> List[dict]:
     """
-    Asynchronously upload each file to the 'data/{user_id}/threads/{thread_id}/uploads' directory.
+    Asynchronously upload each file to the 'data/threads/{thread_id}/uploads' directory.
     Each file is renamed to include a timestamp: filename_{timestamp}.{extension}.
 
     Args:
         files (list): List of UploadFile objects.
-        user_id (str): Unique identifier for the user.
 
     Returns:
         List[dict]: List of metadata dictionaries for each uploaded file.
