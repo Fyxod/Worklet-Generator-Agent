@@ -146,7 +146,7 @@ export const ThreadForm = ({ onGenerate }: ThreadFormProps) => {
               type="file"
               id="file-upload"
               multiple
-              accept=".pdf,.ppt,.pptx,.jpg,.jpeg,.png,.md"
+              accept=".pdf,.ppt,.pptx,.jpg,.jpeg,.png,.md,.xlsx,.xls,.csv"
               onChange={handleFileChange}
               className="hidden"
             />
