@@ -31,3 +31,5 @@ selectolax
 pandas
 parsel
 tiktoken
+pandas
+xlrd
