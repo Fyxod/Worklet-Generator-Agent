@@ -1,4 +1,3 @@
-import pandas as pd
 import uuid
 import os
 import shutil
@@ -21,31 +20,14 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
 
 import traceback
-
 # Extensions
-IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".bmp", ".gif"}
+IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.gif'}
 SUPPORTED_EXTENSIONS = {
-    ".pdf",
-    ".docx",
-    ".rtf",
-    ".txt",
-    ".epub",
-    ".odt",
-    ".ppt",
-    ".pptx",
-    ".xls",
-    ".xlsx",
-    ".csv",
-    ".html",
-    ".xml",
-    ".md",
-    *IMAGE_EXTENSIONS,
+    '.pdf', '.docx', '.rtf', '.txt', '.epub', '.odt', '.ppt', '.pptx',
+    '.xls', '.xlsx', '.csv', '.html', '.xml', '.md', *IMAGE_EXTENSIONS
 }
 
-
-async def extract_document(
-    path, title="Untitled", file_name=None, user_id=None, thread_id=None
-):
+async def extract_document(path, title="Untitled", file_name=None,  thread_id=None):
     start_time = time.time()
     file_path = path
     ext = Path(path).suffix.lower()
@@ -57,30 +39,21 @@ async def extract_document(
     # --- Handle standalone images ---
     if ext in IMAGE_EXTENSIONS:
         try:
-            await sio.emit(
-                f"{user_id}/progress",
-                {"message": f"{title} is an image, extracting text..."},
-            )
             text = await image_parser(file_path)
         except Exception as e:
             print(f"Error processing image {file_name}: {str(e)}")
             return None
 
         doc_id = str(uuid.uuid4())
-        await sio.emit(
-            f"{user_id}/progress", {"message": f"processed {file_name} successfully"}
-        )
         end_time = time.time()
-        print(
-            f"Time taken to process {file_name} main image: {end_time - start_time} seconds"
-        )
+        print(f"Time taken to process {file_name} main image: {end_time - start_time} seconds")
         return Document(
             id=doc_id,
             type=ext[1:],
             file_name=file_name or os.path.basename(file_path),
             content=[Page(number=1, text=text)],
             title=title,
-            full_text=text,
+            full_text=text
         )
 
     # --- Handle Markdown files ---
@@ -95,14 +68,14 @@ async def extract_document(
             plain_text = soup.get_text(separator="\n")
 
             # Prepare image handling
-            image_dir = f"data/{user_id}/threads/{thread_id}/images/{name}"
+            image_dir = f"data/threads/{thread_id}/images/{name}"
             os.makedirs(image_dir, exist_ok=True)
 
             ocr_tasks = {}
             image_names = []
 
             # Regex to find Markdown image syntax: ![alt](path)
-            image_pattern = re.compile(r"!\[.*?\]\((.*?)\)")
+            image_pattern = re.compile(r'!\[.*?\]\((.*?)\)')
             matches = image_pattern.findall(md_text)
 
             page_text = plain_text
@@ -139,10 +112,6 @@ async def extract_document(
                 page_text = page_text.replace(placeholder, image_text, 1)
 
             doc_id = str(uuid.uuid4())
-            await sio.emit(
-                f"{user_id}/progress",
-                {"message": f"Processed {file_name} (Markdown) successfully"},
-            )
 
             return Document(
                 id=doc_id,
@@ -150,42 +119,11 @@ async def extract_document(
                 file_name=file_name or os.path.basename(file_path),
                 content=[Page(number=1, text=page_text, images=image_names)],
                 title=title,
-                full_text=md_text,  # preserve original markdown
+                full_text=md_text  # preserve original markdown
             )
 
         except Exception as e:
             print(f"Error processing Markdown file {file_name}: {str(e)}")
-            return None
-
-    if ext in {".xls", ".csv"}:
-        try:
-
-            # Read Excel or CSV file
-            if ext == ".csv":
-                df = pd.read_csv(file_path)
-            else:
-                df = pd.read_excel(file_path)
-
-            # Convert to plain text
-            text = df.to_string(index=False)
-
-            doc_id = str(uuid.uuid4())
-            await sio.emit(
-                f"{user_id}/progress",
-                {"message": f"Processed {file_name} (Excel/CSV) successfully"},
-            )
-
-            return Document(
-                id=doc_id,
-                type="spreadsheet",
-                file_name=file_name or os.path.basename(file_path),
-                content=[Page(number=1, text=text)],
-                title=title,
-                full_text=text,
-            )
-
-        except Exception as e:
-            print(f"Error processing Excel/CSV file {file_name}: {str(e)}")
             return None
     
     # --- Handle PowerPoint files ---
@@ -194,7 +132,7 @@ async def extract_document(
         pages = []
         combined_texts = []
         ocr_tasks = {}
-        image_dir = f"data/{user_id}/threads/{thread_id}/images/{name}"
+        image_dir = f"data/threads/{thread_id}/images/{name}"
         os.makedirs(image_dir, exist_ok=True)
 
         for slide_number, slide in enumerate(prs.slides, start=1):
@@ -223,9 +161,7 @@ async def extract_document(
                     page_text += f"\n\n[Image: {image_name}]\n{placeholder}"
                     image_names.append(image_name)
 
-                    ocr_tasks[placeholder] = asyncio.create_task(
-                        image_parser(image_path)
-                    )
+                    ocr_tasks[placeholder] = asyncio.create_task(image_parser(image_path))
 
             combined_texts.append(page_text)
             pages.append(Page(number=slide_number, text=page_text, images=image_names))
@@ -241,18 +177,11 @@ async def extract_document(
             for page in pages:
                 if placeholder in page.text:
                     page.text = page.text.replace(placeholder, image_text, 1)
-            combined_texts = [
-                txt.replace(placeholder, image_text, 1) for txt in combined_texts
-            ]
+            combined_texts = [txt.replace(placeholder, image_text, 1) for txt in combined_texts]
 
         doc_id = str(uuid.uuid4())
-        await sio.emit(
-            f"{user_id}/progress", {"message": f"Processing {title} successfully..."}
-        )
         end_time = time.time()
-        print(
-            f"Time taken to process {title} successfully: {end_time - start_time} seconds"
-        )
+        print(f"Time taken to process {title} successfully: {end_time - start_time} seconds")
         return Document(
             id=doc_id,
             type=ext[1:],
@@ -263,6 +192,8 @@ async def extract_document(
         )
 
     # --- Handle PDFs ---
+    print(f"DEBUG: Trying to open PDF at {file_path}, exists={os.path.exists(file_path)}, size={os.path.getsize(file_path) if os.path.exists(file_path) else 'N/A'}")
+    # file_path = os.path.abspath(path)
     doc = fitz.open(file_path)
     pages = []
     combined_texts = []
@@ -273,7 +204,7 @@ async def extract_document(
         page_text = page.get_text("text")
 
         image_names = []
-        image_dir = f"data/{user_id}/threads/{thread_id}/images/{name}"
+        image_dir = f"data/threads/{thread_id}/images/{name}"
         os.makedirs(image_dir, exist_ok=True)
 
         # Extract embedded raster images
@@ -332,18 +263,11 @@ async def extract_document(
         for page in pages:
             if placeholder in page.text:
                 page.text = page.text.replace(placeholder, image_text, 1)
-        combined_texts = [
-            txt.replace(placeholder, image_text, 1) for txt in combined_texts
-        ]
+        combined_texts = [txt.replace(placeholder, image_text, 1) for txt in combined_texts]
 
     doc_id = str(uuid.uuid4())
-    await sio.emit(
-        f"{user_id}/progress", {"message": f"Processing {title} successfully..."}
-    )
     end_time = time.time()
-    print(
-        f"Time taken to process {title} successfully: {end_time - start_time} seconds"
-    )
+    print(f"Time taken to process {title} successfully: {end_time - start_time} seconds")
     return Document(
         id=doc_id,
         type=ext[1:],
