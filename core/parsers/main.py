@@ -1,3 +1,4 @@
+import pandas as pd
 import uuid
 import os
 import shutil
@@ -125,6 +126,33 @@ async def extract_document(path, title="Untitled", file_name=None,  thread_id=No
         except Exception as e:
             print(f"Error processing Markdown file {file_name}: {str(e)}")
             return None
+
+    if ext in {".xls", ".csv"}:
+        try:
+
+            # Read Excel or CSV file
+            if ext == ".csv":
+                df = pd.read_csv(file_path)
+            else:
+                df = pd.read_excel(file_path)
+
+            # Convert to plain text
+            text = df.to_string(index=False)
+
+            doc_id = str(uuid.uuid4())
+
+            return Document(
+                id=doc_id,
+                type="spreadsheet",
+                file_name=file_name or os.path.basename(file_path),
+                content=[Page(number=1, text=text)],
+                title=title,
+                full_text=text,
+            )
+
+        except Exception as e:
+            print(f"Error processing Excel/CSV file {file_name}: {str(e)}")
+            return None
     
     # --- Handle PowerPoint files ---
     if ext in {".ppt", ".pptx"}:
@@ -192,6 +220,8 @@ async def extract_document(path, title="Untitled", file_name=None,  thread_id=No
         )
 
     # --- Handle PDFs ---
+    print(f"DEBUG: Trying to open PDF at {file_path}, exists={os.path.exists(file_path)}, size={os.path.getsize(file_path) if os.path.exists(file_path) else 'N/A'}")
+    # file_path = os.path.abspath(path)
     doc = fitz.open(file_path)
     pages = []
     combined_texts = []

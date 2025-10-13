@@ -22,6 +22,7 @@ markdown
 lxml
 pydantic
 pydantic[email]
+pydantic-settings
 reportlab
 selenium
 selenium-stealth
@@ -29,3 +30,6 @@ webdriver_manager
 selectolax
 pandas
 parsel
+tiktoken
+pandas
+xlrd
