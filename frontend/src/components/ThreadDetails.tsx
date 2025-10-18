@@ -7,6 +7,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { API_URL } from '@/config';
 import { toast } from 'sonner';
+import { ApiError, requestBlob, ensureOk } from '@/lib/http';
 import { useState } from 'react';
 
 interface ThreadDetailsProps {
@@ -26,9 +27,7 @@ export const ThreadDetails = ({ thread, worklets }: ThreadDetailsProps) => {
   const handleDownload = async (type: 'pdf' | 'ppt') => {
     if (!selected) return;
     try {
-      const res = await fetch(`${API_URL}/thread/${thread.thread_id}/download/${selected.worklet_id}/${type}`);
-      if (!res.ok) throw new Error(`Failed to download ${type.toUpperCase()} for worklet`);
-      const blob = await res.blob();
+      const blob = await requestBlob(`${API_URL}/thread/${thread.thread_id}/download/${selected.worklet_id}/${type}`);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -40,14 +39,18 @@ export const ThreadDetails = ({ thread, worklets }: ThreadDetailsProps) => {
       toast.success(`${type.toUpperCase()} downloaded`);
     } catch (e) {
       console.error(e);
-      toast.error(e instanceof Error ? e.message : 'Download failed');
+      if (e instanceof ApiError) {
+        toast.error(e.message);
+      } else {
+        toast.error(e instanceof Error ? e.message : 'Download failed');
+      }
     }
   };
 
   const handleDownloadAll = async (type: 'pdf' | 'ppt') => {
     try {
       const res = await fetch(`${API_URL}/thread/${thread.thread_id}/download/all/${type}`);
-      if (!res.ok) throw new Error(`Failed to download all worklets as ${type.toUpperCase()}`);
+      await ensureOk(res);
 
       const disposition = res.headers.get('Content-Disposition');
       let suggestedName = disposition?.match(/filename="?([^";]+)"?/)?.[1];
@@ -58,7 +61,7 @@ export const ThreadDetails = ({ thread, worklets }: ThreadDetailsProps) => {
         // Ensure .zip extension
         suggestedName = suggestedName.replace(/\.[^.]+$/, '') + '.zip';
       }
-      const blob = await res.blob();
+  const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -70,7 +73,11 @@ export const ThreadDetails = ({ thread, worklets }: ThreadDetailsProps) => {
       toast.success(`ZIP with all ${type.toUpperCase()} files downloaded`);
     } catch (e) {
       console.error(e);
-      toast.error(e instanceof Error ? e.message : 'Bulk download failed');
+      if (e instanceof ApiError) {
+        toast.error(e.message);
+      } else {
+        toast.error(e instanceof Error ? e.message : 'Bulk download failed');
+      }
     }
   };
 

@@ -12,6 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getSocket } from '@/lib/socket';
 import { toast } from 'sonner';
 import { API_URL } from '@/config';
+import { ApiError, requestJson, formatValidationDetails } from '@/lib/http';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -75,8 +76,7 @@ const Index = () => {
 
   const fetchThreads = async () => {
     try {
-      const response = await fetch(`${API_URL}/thread/all`);
-      const data = await response.json();
+      const data = await requestJson<{ threads: Thread[] }>(`${API_URL}/thread/all`);
       const fetched: Thread[] = data.threads || [];
       // Sort descending by created_at (most recent first). Guard against invalid dates.
       const sorted = [...fetched].sort((a, b) => {
@@ -87,15 +87,18 @@ const Index = () => {
       setThreads(sorted);
     } catch (error) {
       console.error('Error fetching threads:', error);
-      toast.error('Failed to fetch threads');
+      if (error instanceof ApiError) {
+        toast.error(error.message);
+      } else {
+        toast.error('Failed to fetch threads');
+      }
     }
   };
 
   const fetchThread = async (id: string) => {
     try {
       setThreadLoading(true);
-      const response = await fetch(`${API_URL}/thread/${id}`);
-      const data = await response.json();
+      const data = await requestJson<Thread>(`${API_URL}/thread/${id}`);
       setSelectedThread(data);
 
       if (!data.generated) {
@@ -116,7 +119,17 @@ const Index = () => {
       }
     } catch (error) {
       console.error('Error fetching thread:', error);
-      toast.error('Failed to fetch thread');
+      if (error instanceof ApiError) {
+        if (error.status === 404) {
+          // Navigate to NotFound and show backend message
+          toast.error(error.message || 'Thread not found');
+          navigate('/not-found', { replace: true, state: { code: error.status, message: error.message, path: error.path || `/thread/${id}` } });
+        } else {
+          toast.error(error.message);
+        }
+      } else {
+        toast.error('Failed to fetch thread');
+      }
     }
     finally {
       setThreadLoading(false);
@@ -236,7 +249,7 @@ const Index = () => {
     setWorkletsStore(prev => ({ ...prev, [newThreadId]: [] }));
 
     // Navigate to the new thread URL
-    navigate(`/${newThreadId}`);
+  navigate(`/thread/${newThreadId}`);
 
     // Start listening for updates BEFORE sending request
     setupSocketListeners(newThreadId);
@@ -250,16 +263,10 @@ const Index = () => {
     formData.files.forEach((file: File) => body.append('files', file));
 
     try {
-      const response = await fetch(`${API_URL}/generate`, {
+      const data = await requestJson<{ worklets: Worklet[] }>(`${API_URL}/generate`, {
         method: 'POST',
         body,
       });
-
-      if (!response.ok) {
-        throw new Error(`Backend responded with status ${response.status}`);
-      }
-
-  const data = await response.json();
   setWorklets(data.worklets || []);
       // Mark thread as generated & not local anymore so the progress bar disappears
       setSelectedThread(prev => prev ? { 
@@ -277,7 +284,18 @@ const Index = () => {
       toast.success('Worklets generated successfully');
     } catch (error) {
       console.error('Error generating worklets:', error);
-      toast.error('Failed to generate worklets');
+      if (error instanceof ApiError) {
+        if (error.status === 409) {
+          toast.error(error.message || 'Thread ID already exists');
+        } else if (error.status === 422) {
+          const hint = formatValidationDetails(error.details);
+          toast.error([error.message, hint].filter(Boolean).join('\n'));
+        } else {
+          toast.error(error.message);
+        }
+      } else {
+        toast.error('Failed to generate worklets');
+      }
 
       navigate('/new', { state: { previousFormData } });
       setShowForm(true);
@@ -300,7 +318,7 @@ const Index = () => {
   setProgressMessages([]);
     setWorklets([]);
     setThreadLoading(true);
-    navigate(`/${id}`);
+  navigate(`/thread/${id}`);
   };
 
   const handleHeaderClick = () => {
@@ -316,8 +334,7 @@ const Index = () => {
 
   const handleDeleteThread = async (id: string) => {
     try {
-      const res = await fetch(`${API_URL}/thread/delete/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error(`Failed to delete thread (status ${res.status})`);
+      await requestJson(`${API_URL}/thread/delete/${id}`, { method: 'DELETE' });
       setThreads(prev => prev.filter(t => t.thread_id !== id));
       // Clean stores
       setProgressStore(prev => { const { [id]: _, ...rest } = prev; return rest; });
@@ -332,7 +349,11 @@ const Index = () => {
       toast.success('Thread deleted');
     } catch (e) {
       console.error(e);
-      toast.error(e instanceof Error ? e.message : 'Failed to delete thread');
+      if (e instanceof ApiError) {
+        toast.error(e.message);
+      } else {
+        toast.error(e instanceof Error ? e.message : 'Failed to delete thread');
+      }
     }
   };
 
