@@ -2,6 +2,9 @@ from core.models.gpu_config import GPULLMConfig
 
 # SETTINGS
 SWITCHES = {
+    "EXTRACT_KEYWORDS_DOMAINS": True,  # Whether to extract keywords and domains from input
+    "GENERATE_KEYWORD": True,  # Whether to generate appropriate keywords for reference search(uses worklet title as default otherwise)
+    "RANK_REFERENCES": False,  # Whether to rank references based on relevance
     "FALLBACK_TO_GEMINI": True,  # Fallback to Gemini if Ollama fails
     "FALLBACK_TO_OPENAI": False,  # Fallback to OpenAI if BOTH Ollama and Gemini fails
 }
@@ -9,13 +12,13 @@ SWITCHES = {
 PORT1 = 11434
 PORT2 = 11435
 
-GPT_OSS_20B = "gpt-oss:20b-50k-8k"
+GPU_MODEL = "gpt-oss:20b-50k-8k"
 
 # GPU LLM configurations
-KEYWORD_DOMAIN_EXTRACTION_LLM = GPULLMConfig(model=GPT_OSS_20B, port=PORT2)
-WORKLET_GENERATOR_LLM = GPULLMConfig(model=GPT_OSS_20B, port=PORT2)
-REFERENCE_KEYWORD_LLM = GPULLMConfig(model=GPT_OSS_20B, port=PORT2)
-REFERENCE_SORT_LLM = GPULLMConfig(model=GPT_OSS_20B, port=PORT2)
+KEYWORD_DOMAIN_EXTRACTION_LLM = GPULLMConfig(model=GPU_MODEL, port=PORT2)
+WORKLET_GENERATOR_LLM = GPULLMConfig(model=GPU_MODEL, port=PORT2)
+REFERENCE_KEYWORD_LLM = GPULLMConfig(model=GPU_MODEL, port=PORT2)
+REFERENCE_RANKING_LLM = GPULLMConfig(model=GPU_MODEL, port=PORT2)
 
 # Fallback LLM models
 # Used if SWITCHES["FALLBACK_TO_GEMINI"] = True
@@ -30,7 +33,7 @@ EXTRACT_KEYWORDS_DOMAINS = "extract_keywords_domains"
 GENERATE_WORKLETS = "generate_worklets"
 WEB_SEARCH = "web_search"
 REFERENCES = "references"
-SORT_REFERENCES = "sort_references"
+RANK_REFERENCES = "rank_references"
 GENERATE_FILES = "generate_files"
 ROUTER = "router"
 ANSWER = "answer"

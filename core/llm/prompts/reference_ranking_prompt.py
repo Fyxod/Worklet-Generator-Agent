@@ -1,4 +1,4 @@
-def reference_sorting_prompt(
+def reference_ranking_prompt(
     title: str,
     description: str,
     references: dict,
