@@ -7,7 +7,7 @@ from pipeline.state import AgentState
 from core.database import db
 from pipeline.builder import Pipeline
 from core.utils.process_array_string import process_array_string
-
+from app.broadcast import update_message
 router = APIRouter(prefix="/generate", tags=["generate"])
 
 
@@ -20,7 +20,10 @@ async def generate(
     custom_prompt: Annotated[str, Form()],
     files: Annotated[list[UploadFile], File()] = None,
 ):
-
+    await update_message(
+        {"message": "Intializing pipeline..."},
+        topic=f"{thread_id}/status_update",
+    )
     existing_thread = db.threads.find_one({"thread_id": thread_id})
     if existing_thread:
         # Conflict: a resource with the same thread_id already exists

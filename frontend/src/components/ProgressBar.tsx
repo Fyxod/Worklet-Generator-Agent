@@ -14,7 +14,11 @@ export const ProgressBar = ({ messages }: ProgressBarProps) => {
   const swapTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!messages || messages.length === 0) return;
+    if (!messages || messages.length === 0) {
+      // No messages: hide the progress bar
+      if (currentMessage) setCurrentMessage('');
+      return;
+    }
     const last = messages[messages.length - 1];
 
     // First message: set and fade in

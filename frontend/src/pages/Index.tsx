@@ -25,6 +25,10 @@ const Index = () => {
   const [showForm, setShowForm] = useState(false);
   const [progressMessages, setProgressMessages] = useState<ProgressMessage[]>([]);
   const [worklets, setWorklets] = useState<Worklet[]>([]);
+  // Initialization placeholder state for brand-new thread creation
+  const [isInitializing, setIsInitializing] = useState<boolean>(false);
+  const isInitializingRef = useRef<boolean>(false);
+  const initTimeoutRef = useRef<number | null>(null);
   // Stores to preserve per-thread progress & worklets when user navigates away
   const [progressStore, setProgressStore] = useState<Record<string, ProgressMessage[]>>({});
   const [workletsStore, setWorkletsStore] = useState<Record<string, Worklet[]>>({});
@@ -37,6 +41,7 @@ const Index = () => {
   const [domainKeywordModal, setDomainKeywordModal] = useState<{
     open: boolean;
     data: DomainsKeywords | null;
+    message?: string;
   }>({ open: false, data: null });
   
   const [webQueryModal, setWebQueryModal] = useState<{
@@ -103,7 +108,8 @@ const Index = () => {
 
       if (!data.generated) {
         setupSocketListeners(id);
-    
+        // Do NOT start initializing when navigating to an existing thread
+        // Only show initialization for brand-new local thread creation
         setProgressMessages([]);
         setWorklets(workletsStore[id] || []);
       } else {
@@ -136,6 +142,33 @@ const Index = () => {
     }
   };
 
+  const stopInitializing = () => {
+    setIsInitializing(false);
+    isInitializingRef.current = false;
+    if (initTimeoutRef.current) {
+      clearTimeout(initTimeoutRef.current);
+      initTimeoutRef.current = null;
+    }
+  };
+
+  const startInitializing = (id: string) => {
+    stopInitializing();
+    setIsInitializing(true);
+    isInitializingRef.current = true;
+    // Immediately show the placeholder message
+    setProgressMessages([{ message: 'Initializing pipeline', timestamp: Date.now() }]);
+    // Guard timeout to auto-hide after 10s if nothing arrives
+    initTimeoutRef.current = window.setTimeout(() => {
+      // Only clear if still on the same thread and still initializing
+      if (currentThreadIdRef.current === id) {
+        setProgressMessages([]);
+        setIsInitializing(false);
+        isInitializingRef.current = false;
+      }
+      initTimeoutRef.current = null;
+    }, 10000);
+  };
+
   const setupSocketListeners = (id: string) => {
     // Always tear down previous listeners before setting new ones
     socketCleanupRef.current?.();
@@ -155,13 +188,17 @@ const Index = () => {
 
       // Only update UI if we're on the same thread; keep only the last message in UI state
       if (currentThreadIdRef.current === id) {
+        // First real message arrived; stop showing initialization placeholder
+        if (isInitializingRef.current) {
+          stopInitializing();
+        }
         setProgressMessages([{ message: data.message, timestamp }]);
       }
     };
 
-    const topicApprovalHandler = (data: DomainsKeywords) => {
+    const topicApprovalHandler = (data: DomainsKeywords & { message?: string }) => {
       console.log('Received topic approval request:', data);
-      setDomainKeywordModal({ open: true, data });
+      setDomainKeywordModal({ open: true, data, message: data.message });
     };
 
     const webApprovalHandler = (data: { queries: string[] }) => {
@@ -201,6 +238,7 @@ const Index = () => {
     }
     // Stop listening to any previous thread updates
     socketCleanupRef.current?.();
+    stopInitializing();
     setShowForm(true);
     setSelectedThread(null);
   setProgressMessages([]);
@@ -213,6 +251,7 @@ const Index = () => {
     }
     // Stop listening to any previous thread updates
     socketCleanupRef.current?.();
+    stopInitializing();
     setShowForm(true);
   };
 
@@ -251,8 +290,10 @@ const Index = () => {
     // Navigate to the new thread URL
   navigate(`/thread/${newThreadId}`);
 
-    // Start listening for updates BEFORE sending request
-    setupSocketListeners(newThreadId);
+  // Start listening for updates BEFORE sending request
+  setupSocketListeners(newThreadId);
+  // Show initializing placeholder immediately for brand-new thread
+  startInitializing(newThreadId);
 
     const body = new FormData();
     body.append('thread_id', newThreadId);
@@ -280,6 +321,7 @@ const Index = () => {
       }
       // Hide progress box by marking thread as generated above; do not append more progress UI entries
       setProgressMessages([]);
+      stopInitializing();
       fetchThreads();
       toast.success('Worklets generated successfully');
     } catch (error) {
@@ -301,6 +343,7 @@ const Index = () => {
       setShowForm(true);
       setSelectedThread(null);
       setProgressMessages([]);
+      stopInitializing();
       setWorklets([]);
     }
   };
@@ -317,6 +360,7 @@ const Index = () => {
     setSelectedThread(null);
   setProgressMessages([]);
     setWorklets([]);
+    stopInitializing();
     setThreadLoading(true);
   navigate(`/thread/${id}`);
   };
@@ -326,6 +370,7 @@ const Index = () => {
     navigate('/');
     // Stop listening to any previous thread updates
     socketCleanupRef.current?.();
+    stopInitializing();
     setShowForm(false);
     setSelectedThread(null);
   setProgressMessages([]);
@@ -344,6 +389,7 @@ const Index = () => {
         navigate('/');
         setSelectedThread(null);
         setProgressMessages([]);
+        stopInitializing();
         setWorklets([]);
       }
       toast.success('Thread deleted');
@@ -391,7 +437,7 @@ const Index = () => {
       },
     };
     socket.emit(`${threadId}/topic_response`, sanitized);
-    setDomainKeywordModal({ open: false, data: null });
+  setDomainKeywordModal({ open: false, data: null, message: undefined });
   };
 
   const handleWebQuerySubmit = (queries: string[]) => {
@@ -445,6 +491,11 @@ const Index = () => {
   useEffect(() => {
     return () => {
       socketCleanupRef.current?.();
+      // Clear any pending init timeout on unmount
+      if (initTimeoutRef.current) {
+        clearTimeout(initTimeoutRef.current);
+        initTimeoutRef.current = null;
+      }
     };
   }, []);
 
@@ -508,6 +559,8 @@ const Index = () => {
         <DomainKeywordModal
           open={domainKeywordModal.open}
           data={domainKeywordModal.data}
+          threadName={selectedThread?.thread_name}
+          message={domainKeywordModal.message}
           onSubmit={handleDomainKeywordSubmit}
         />
       )}

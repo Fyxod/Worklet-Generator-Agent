@@ -23,6 +23,7 @@ from core.llm.outputs import (
     WorkletGenerationResult,
     ReferenceKeywordResult,
     ReferenceSortingResult,
+    Sources
 )
 from core.references.generate_references import generate_references
 from core.constants import SWITCHES, WEB_SEARCH, REFERENCES
@@ -52,9 +53,6 @@ os.makedirs("debug", exist_ok=True)
 
 
 async def process_input(state: AgentState) -> AgentState:
-    print(state.links)
-    print(type(state.links))
-    print("before this" * 50)
     s = time.time()
 
     async def process_files_task():
@@ -107,23 +105,31 @@ async def process_input(state: AgentState) -> AgentState:
 
 async def extract_keywords_domains(state: AgentState) -> AgentState:
     s = time.time()
-    prompt = build_extraction_prompt(state)
-    with open("debug/extraction_prompt.txt", "w", encoding="utf-8") as f:
-        f.write(str(prompt))
+    if SWITCHES["EXTRACT_KEYWORDS_DOMAINS"]:
+        prompt = build_extraction_prompt(state)
+        with open("debug/extraction_prompt.txt", "w", encoding="utf-8") as f:
+            f.write(str(prompt))
 
-    await update_message(
-        {"message": "Extracting keywords and domains..."},
-        topic=f"{state.thread_id}/status_update",
-    )
+        await sio.emit(
+            f"{state.thread_id}/status_update",
+            {"message": "Extracting keywords and domains..."},
+        )
 
-    result: KeywordsExtractionResult = await invoke_llm(
-        gpu_model=KEYWORD_DOMAIN_EXTRACTION_LLM.model,
-        response_schema=KeywordsExtractionResult,
-        contents=prompt,
-        port=KEYWORD_DOMAIN_EXTRACTION_LLM.port,
-    )
-    with open("debug/keywords_domains.json", "w", encoding="utf-8") as f:
-        f.write(json.dumps(result.model_dump(), indent=2))
+        result: KeywordsExtractionResult = await invoke_llm(
+            ollama_model=KEYWORD_DOMAIN_EXTRACTION_LLM.model,
+            response_schema=KeywordsExtractionResult,
+            contents=prompt,
+            port=KEYWORD_DOMAIN_EXTRACTION_LLM.port,
+        )
+        with open("debug/keywords_domains.json", "w", encoding="utf-8") as f:
+            f.write(json.dumps(result.model_dump(), indent=2))
+
+    else:
+        # Use empty keywords and domains if extraction is disabled
+        result = KeywordsExtractionResult(
+            keywords=Sources(worklet=[], link=[], custom_prompt=[]),
+            domains=Sources(worklet=[], link=[], custom_prompt=[]),
+        )
 
     updated_domains, updated_keywords = await get_approved_items(
         result.domains.model_dump(), result.keywords.model_dump(), state.thread_id
