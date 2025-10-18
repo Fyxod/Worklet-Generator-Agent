@@ -3,7 +3,7 @@ from core.llm.prompts.main_prompt import unified_problem_generation_prompt
 from core.llm.prompts.reference_ranking_prompt import reference_ranking_prompt
 import asyncio
 from core.utils.compress_prompt import compress_main_prompt, compress_references
-
+from core.constants  import MAX_TOKENS
 from pipeline.state import AgentState
 from pipeline.tools.search import search_tavily as search_tool
 from core.models.worklet import Worklet
@@ -45,7 +45,7 @@ async def parallel_search(queries):
 def build_main_prompt(state: AgentState) -> list:
     modified_state: AgentState = compress_main_prompt(
         state.model_copy(),
-        max_tokens=4000,
+        max_tokens=MAX_TOKENS,
         prompt_offset=1100,
         pass_limit=10,
         verbose=True,
@@ -89,7 +89,7 @@ def build_extraction_prompt(state: AgentState) -> list:
 
     modified_state: AgentState = compress_main_prompt(
         state.model_copy(),
-        max_tokens=4000,
+        max_tokens=MAX_TOKENS,
         prompt_offset=600,
         pass_limit=10,
         verbose=False,
@@ -116,7 +116,7 @@ def build_reference_ranking_prompt(worklet: Worklet) -> list:
 
     modified_references = compress_references(
         references=worklet.references,
-        max_tokens=4000,
+        max_tokens=MAX_TOKENS,
         prompt_offset=400,
         pass_limit=10,
         verbose=False,
