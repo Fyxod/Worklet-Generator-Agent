@@ -6,80 +6,46 @@ interface ProgressBarProps {
   messages: ProgressMessage[];
 }
 
+// Simplified progress: show only the latest message; no queue/rotation, but with a small fade.
 export const ProgressBar = ({ messages }: ProgressBarProps) => {
   const [currentMessage, setCurrentMessage] = useState<string>('');
-  const [messageQueue, setMessageQueue] = useState<ProgressMessage[]>([]); // only pending (not yet displayed) messages
-  const [isFading, setIsFading] = useState<boolean>(true); // start faded, then fade in initial
+  const [isFading, setIsFading] = useState<boolean>(true);
+  const FADE_DURATION = 120; // ms
+  const swapTimeoutRef = useRef<number | null>(null);
 
-  const FADE_DURATION = 100; // ms
-
-  // Track last processed (displayed) message timestamp to avoid re-adding old messages
-  const lastProcessedRef = useRef<number>(0);
-  const rotationTimeoutRef = useRef<number | null>(null);
-
-  // Ingest only new messages (those with a timestamp greater than last processed)
   useEffect(() => {
     if (!messages || messages.length === 0) return;
+    const last = messages[messages.length - 1];
 
-    const newMessages = messages.filter(m => m.timestamp > lastProcessedRef.current);
-    if (newMessages.length === 0) return; // nothing new
+    // First message: set and fade in
+    if (!currentMessage) {
+      setCurrentMessage(last.message);
+      requestAnimationFrame(() => setIsFading(false));
+      return;
+    }
 
-    setMessageQueue(prev => {
-      // If there's no current message being displayed, show the first new one immediately
-      if (!currentMessage) {
-        const [first, ...rest] = newMessages;
-        setCurrentMessage(first.message);
-        lastProcessedRef.current = first.timestamp;
-        // trigger fade-in for initial
-        requestAnimationFrame(() => setIsFading(false));
-        return [...prev, ...rest];
+    // If message changed, perform a quick fade-out then swap then fade-in
+    if (last.message !== currentMessage) {
+      setIsFading(true);
+      if (swapTimeoutRef.current) {
+        clearTimeout(swapTimeoutRef.current);
       }
-      // Current message stays until we rotate; queue the new ones
-      return [...prev, ...newMessages];
-    });
+      swapTimeoutRef.current = window.setTimeout(() => {
+        setCurrentMessage(last.message);
+        setIsFading(false);
+        swapTimeoutRef.current = null;
+      }, FADE_DURATION);
+    }
   }, [messages, currentMessage]);
 
-  // Rotate to next queued message ONLY if a next one exists; otherwise keep current message indefinitely
-  useEffect(() => {
-    if (!currentMessage) return; // nothing displayed yet
-
-    // If there are pending messages and no timer running, schedule rotation
-    if (messageQueue.length > 0 && rotationTimeoutRef.current == null) {
-      rotationTimeoutRef.current = window.setTimeout(() => {
-        const next = messageQueue[0];
-        if (next) {
-          // Fade out first
-            setIsFading(true);
-            // After fade duration, swap message & fade back in
-            window.setTimeout(() => {
-              setCurrentMessage(next.message);
-              lastProcessedRef.current = next.timestamp;
-              setMessageQueue(prev => prev.slice(1)); // remove consumed
-              setIsFading(false);
-            }, FADE_DURATION);
-        }
-        // Clear rotation timeout so future rotations can be scheduled (even while inner fade timers may still run)
-        rotationTimeoutRef.current = null;
-      }, 700);
-    }
-
-    // If queue becomes empty while timer exists (shouldn't happen often), clear it
-    if (messageQueue.length === 0 && rotationTimeoutRef.current != null) {
-      clearTimeout(rotationTimeoutRef.current);
-      rotationTimeoutRef.current = null;
-    }
-  }, [messageQueue, currentMessage]);
-
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (rotationTimeoutRef.current != null) {
-        clearTimeout(rotationTimeoutRef.current);
+      if (swapTimeoutRef.current) {
+        clearTimeout(swapTimeoutRef.current);
       }
     };
   }, []);
 
-  // If no message ever displayed yet, render nothing
   if (!currentMessage) return null;
 
   return (
