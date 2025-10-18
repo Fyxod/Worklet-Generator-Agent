@@ -251,30 +251,41 @@ async def rank_references(state: AgentState) -> AgentState:
     if not SWITCHES["RANK_REFERENCES"]:
         return state
 
-    for worklet in state.worklets:
-        await sio.emit(
-            f"{state.thread_id}/status_update",
-            {"message": f"Ranking references for worklet: {worklet.title}..."},
-        )
-        if not worklet.references or len(worklet.references) == 0:
-            continue
+    try:
+        for worklet in state.worklets:
+            try:
+                await sio.emit(
+                    f"{state.thread_id}/status_update",
+                    {"message": f"Ranking references for worklet: {worklet.title}..."},
+                )
+                if not worklet.references or len(worklet.references) == 0:
+                    continue
 
-        prompt = build_reference_ranking_prompt(worklet)
+                prompt = build_reference_ranking_prompt(worklet)
 
-        result: ReferenceSortingResult = await invoke_llm(
-            ollama_model=REFERENCE_RANKING_LLM.model,
-            response_schema=ReferenceSortingResult,
-            contents=prompt,
-            port=REFERENCE_RANKING_LLM.port,
-        )
+                result: ReferenceSortingResult = await invoke_llm(
+                    ollama_model=REFERENCE_RANKING_LLM.model,
+                    response_schema=ReferenceSortingResult,
+                    contents=prompt,
+                    port=REFERENCE_RANKING_LLM.port,
+                )
 
-        sorted_indices = result.sorted_indices
-        sorted_references = [
-            worklet.references[i] for i in sorted_indices if i < len(worklet.references)
-        ]
-        worklet.references = sorted_references
-        worklet = fix_dashes(worklet)
-        print(f"Ranked references for worklet '{worklet.title}': {sorted_indices}")
+                sorted_indices = result.sorted_indices
+                sorted_references = [
+                    worklet.references[i] for i in sorted_indices if i < len(worklet.references)
+                ]
+                worklet.references = sorted_references
+                worklet = fix_dashes(worklet)
+                print(f"Ranked references for worklet '{worklet.title}': {sorted_indices}")
+            except Exception as e:
+                print(f"Error ranking references for worklet '{worklet.title}': {e}")
+                # Leave worklet.references unchanged for this worklet
+                continue
+    except Exception as e:
+        print(f"Error in rank_references function: {e}")
+        print("Continuing without ranking references.")
+        # Leave all references unchanged
+    
     return state
 
 
