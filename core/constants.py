@@ -7,6 +7,8 @@ SWITCHES = {
     "RANK_REFERENCES": False,  # Whether to rank references based on relevance
     "FALLBACK_TO_GEMINI": True,  # Fallback to Gemini if Ollama fails
     "FALLBACK_TO_OPENAI": False,  # Fallback to OpenAI if BOTH Ollama and Gemini fails
+
+    "REMOTE_GPU": True,  # Use remote GPU LLMs
 }
 
 PORT1 = 11434
@@ -19,7 +21,9 @@ MAX_TOKENS = 50000
 KEYWORD_DOMAIN_EXTRACTION_LLM = GPULLMConfig(model=GPU_MODEL, port=PORT2)
 WORKLET_GENERATOR_LLM = GPULLMConfig(model=GPU_MODEL, port=PORT2)
 REFERENCE_KEYWORD_LLM = GPULLMConfig(model=GPU_MODEL, port=PORT2)
+REFERENCE_KEYWORD_LLM2 = GPULLMConfig(model=GPU_MODEL, port=PORT1)
 REFERENCE_RANKING_LLM = GPULLMConfig(model=GPU_MODEL, port=PORT2)
+REFERENCE_RANKING_LLM2 = GPULLMConfig(model=GPU_MODEL, port=PORT1)
 
 # Fallback LLM models
 # Used if SWITCHES["FALLBACK_TO_GEMINI"] = True
