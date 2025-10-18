@@ -265,7 +265,9 @@ def create_pdf(filename: str, worklet: Worklet, in_memory: bool = False):
                 # Create reference bullet point with plain title and clickable "link"
                 if title_r and link_r:
                     # Plain title followed by clickable "link" word
-                    composed = f'• {title_r} <a href="{link_r}" color="blue"><u>link</u></a>'
+                    composed = (
+                        f'• {title_r} <a href="{link_r}" color="blue"><u>link</u></a>'
+                    )
                 elif title_r:
                     # Title without link
                     composed = f"• {title_r}"
@@ -291,8 +293,7 @@ def create_pdf(filename: str, worklet: Worklet, in_memory: bool = False):
             data = buffer.getvalue()
             buffer.close()
             return data
-        else:
-            print(f"PDF generated: {filename}")
+
     except Exception as e:
         print(f"Failed to generate PDF {filename}: {e}")
 
@@ -509,7 +510,7 @@ def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
 
                 p = tf.add_paragraph()
                 p.level = 1
-                
+
                 # Add bullet point
                 bullet_run = p.add_run()
                 bullet_run.text = "• "
@@ -524,8 +525,10 @@ def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
                     title_run.text = r_title + " "
                     title_run.font.size = Pt(14)
                     title_run.font.name = "Calibri"
-                    title_run.font.color.rgb = RGBColor(0, 0, 0)  # Black for better readability
-                    
+                    title_run.font.color.rgb = RGBColor(
+                        0, 0, 0
+                    )  # Black for better readability
+
                     # Add clickable "link" word
                     link_run = p.add_run()
                     link_run.text = "link"
@@ -533,7 +536,7 @@ def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
                     link_run.font.name = "Calibri"
                     link_run.font.color.rgb = RGBColor(0, 102, 204)
                     link_run.font.underline = True  # Make it look like a link
-                    
+
                     # Set hyperlink on the "link" word
                     try:
                         link_run.hyperlink.address = r_link
@@ -547,7 +550,9 @@ def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
                     title_run.text = r_title
                     title_run.font.size = Pt(14)
                     title_run.font.name = "Calibri"
-                    title_run.font.color.rgb = RGBColor(0, 0, 0)  # Black for better readability
+                    title_run.font.color.rgb = RGBColor(
+                        0, 0, 0
+                    )  # Black for better readability
 
                 elif r_link:
                     # Link without title - show clickable "link" word
@@ -557,7 +562,7 @@ def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
                     link_run.font.name = "Calibri"
                     link_run.font.color.rgb = RGBColor(0, 102, 204)
                     link_run.font.underline = True
-                    
+
                     try:
                         link_run.hyperlink.address = r_link
                     except Exception:
@@ -582,7 +587,7 @@ def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
             return data
         else:
             prs.save(output_filename)
-            print(f"PPT generated: {output_filename}")
+
     except Exception as e:
         print(f"Failed to generate PPT {output_filename}: {e}")
 
@@ -663,4 +668,3 @@ def add_textbox_Title(slide, title, content, top_inch):
     run_content.font.color.rgb = RGBColor(0x00, 0x66, 0xCC)
 
     return top_inch + height + gap
-

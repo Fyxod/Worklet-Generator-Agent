@@ -46,6 +46,7 @@ from app.socket_handler import sio
 from core.utils.get_approved_items import get_approved_items
 from core.utils.get_approved_queries import get_approved_queries
 from core.utils.fix_dashes import fix_dashes
+from app.broadcast import update_message, stop_broadcasting
 
 os.makedirs("debug", exist_ok=True)
 
@@ -58,8 +59,9 @@ async def process_input(state: AgentState) -> AgentState:
 
     async def process_files_task():
         if state.files and len(state.files) > 0:
-            await sio.emit(
-                "status_update", {"message": "Uploading and processing files..."}
+            await update_message(
+                {"message": "Uploading and processing files..."},
+                topic=f"{state.thread_id}/status_update",
             )
             files_data = await upload_files(state.files, state.thread_id)
             if not files_data:
@@ -75,8 +77,9 @@ async def process_input(state: AgentState) -> AgentState:
 
     async def process_links_task():
         if state.links and len(state.links) > 0:
-            await sio.emit(
-                "status_update", {"message": "Extracting data from links..."}
+            await update_message(
+                {"message": "Extracting data from links..."},
+                topic=f"{state.thread_id}/status_update",
             )
             links_data = await extract_links(state.links)
             if not links_data:
@@ -108,9 +111,9 @@ async def extract_keywords_domains(state: AgentState) -> AgentState:
     with open("debug/extraction_prompt.txt", "w", encoding="utf-8") as f:
         f.write(str(prompt))
 
-    await sio.emit(
-        f"{state.thread_id}/status_update",
+    await update_message(
         {"message": "Extracting keywords and domains..."},
+        topic=f"{state.thread_id}/status_update",
     )
 
     result: KeywordsExtractionResult = await invoke_llm(
@@ -138,8 +141,8 @@ async def generate_worklets(state: AgentState) -> AgentState:
     with open("debug/main_prompt.txt", "w", encoding="utf-8") as f:
         f.write(str(prompt))
 
-    await sio.emit(
-        f"{state.thread_id}/status_update", {"message": "Generating worklets..."}
+    await update_message(
+        {"message": "Generating worklets..."}, topic=f"{state.thread_id}/status_update"
     )
 
     result: WorkletGenerationResult = await invoke_llm(
@@ -171,8 +174,8 @@ async def web_search(state: AgentState) -> AgentState:
         return state
 
     queries = await get_approved_queries(queries, state.thread_id)
-    await sio.emit(
-        f"{state.thread_id}/status_update", {"message": "Web search invoked..."}
+    await update_message(
+        {"message": "Web search invoked..."}, topic=f"{state.thread_id}/status_update"
     )
 
     print(f"Performing web search for queries: {queries}")
@@ -181,8 +184,8 @@ async def web_search(state: AgentState) -> AgentState:
         f.write(json.dumps(web_search_results, indent=2))
     state.web_search_results = web_search_results
     print(f"Web search took {time.time() - s:.2f} seconds")
-    await sio.emit(
-        f"{state.thread_id}/status_update", {"message": "Web search completed."}
+    await update_message(
+        {"message": "Web search completed."}, topic=f"{state.thread_id}/status_update"
     )
     return state
 
@@ -195,9 +198,9 @@ async def references(state: AgentState) -> AgentState:
 
     async def process_single_worklet(worklet, llm_config):
         """Process a single worklet with reference keyword generation and fetching"""
-        await sio.emit(
-            f"{state.thread_id}/status_update",
+        await update_message(
             {"message": f"Generating references for worklet: {worklet.title}..."},
+            topic=f"{state.thread_id}/status_update",
         )
         default_keywords = ReferenceKeywordResult(
             google_scholar_keyword=worklet.title, github_keyword=worklet.title
@@ -267,9 +270,9 @@ async def rank_references(state: AgentState) -> AgentState:
     async def rank_single_worklet(worklet, llm_config):
         """Rank references for a single worklet"""
         try:
-            await sio.emit(
-                f"{state.thread_id}/status_update",
+            await update_message(
                 {"message": f"Ranking references for worklet: {worklet.title}..."},
+                topic=f"{state.thread_id}/status_update",
             )
             if not worklet.references or len(worklet.references) == 0:
                 return worklet
@@ -332,15 +335,8 @@ async def generate_files(state: AgentState) -> AgentState:
     )
 
     s = time.time()
-    await sio.emit(
-        f"{state.thread_id}/status_update",
-        {"message": f"Generating files for worklets..."},
-    )
     for idx, worklet in enumerate(state.worklets):
         await generate_file(worklet=worklet, thread_id=state.thread_id)
-        await sio.emit(
-            f"{state.thread_id}/file_generated", {"filename": f"{worklet.title}"}
-        )
 
     print(f"{idx + 1} File generation took {time.time() - s:.2f} seconds")
     db.threads.update_one({"thread_id": state.thread_id}, {"$set": {"generated": True}})
