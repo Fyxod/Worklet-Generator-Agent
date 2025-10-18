@@ -192,7 +192,9 @@ async def references(state: AgentState) -> AgentState:
         return state
 
     s = time.time()
-    for worklet in state.generation_output.worklets:
+
+    async def process_single_worklet(worklet, llm_config):
+        """Process a single worklet with reference keyword generation and fetching"""
         await sio.emit(
             f"{state.thread_id}/status_update",
             {"message": f"Generating references for worklet: {worklet.title}..."},
@@ -200,23 +202,24 @@ async def references(state: AgentState) -> AgentState:
         default_keywords = ReferenceKeywordResult(
             google_scholar_keyword=worklet.title, github_keyword=worklet.title
         )
+
         if SWITCHES["GENERATE_KEYWORD"]:
             prompt = keyword_prompt(worklet.title or worklet.problem_statement)
             try:
                 result: ReferenceKeywordResult = await invoke_llm(
-                    gpu_model=REFERENCE_KEYWORD_LLM.model,
+                    gpu_model=llm_config.model,
                     contents=prompt,
                     response_schema=ReferenceKeywordResult,
-                    port=REFERENCE_KEYWORD_LLM.port,
+                    port=llm_config.port,
                 )
                 keywords = result or default_keywords
 
-                with open(
+                async with aiofiles.open(
                     f"debug/reference_keyword_{worklet.title}.txt",
                     "w",
                     encoding="utf-8",
                 ) as f:
-                    f.write(str(result.model_dump()))
+                    await f.write(str(result.model_dump()))
             except Exception as e:
                 print(
                     f"Error extracting reference keyword for worklet '{worklet.title}': {e}"
@@ -226,15 +229,30 @@ async def references(state: AgentState) -> AgentState:
             keywords = default_keywords
 
         references = await generate_references(keywords)
-        with open(f"debug/references_{worklet.title}.json", "w", encoding="utf-8") as f:
-            f.write(json.dumps([ref.model_dump() for ref in references], indent=2))
-        state.worklets.append(
-            Worklet(
-                **worklet.model_dump(),
-                references=references,
-                worklet_id=str(time.time()),
+        async with aiofiles.open(
+            f"debug/references_{worklet.title}.json", "w", encoding="utf-8"
+        ) as f:
+            await f.write(
+                json.dumps([ref.model_dump() for ref in references], indent=2)
             )
+
+        return Worklet(
+            **worklet.model_dump(),
+            references=references,
+            worklet_id=str(time.time()),
         )
+
+    # Parallelize worklet processing, alternating between the two LLM configs
+    worklets = state.generation_output.worklets
+    tasks = []
+
+    for idx, worklet in enumerate(worklets):
+        # Alternate between LLM1 and LLM2 to keep both ports busy
+        llm_config = REFERENCE_KEYWORD_LLM if idx % 2 == 0 else REFERENCE_KEYWORD_LLM2
+        tasks.append(process_single_worklet(worklet, llm_config))
+
+    # Process all worklets in parallel
+    state.worklets = await asyncio.gather(*tasks)
 
     print(f"Reference generation took {time.time() - s:.2f} seconds")
     return state
@@ -244,41 +262,61 @@ async def rank_references(state: AgentState) -> AgentState:
     if not SWITCHES["RANK_REFERENCES"]:
         return state
 
+    s = time.time()
+
+    async def rank_single_worklet(worklet, llm_config):
+        """Rank references for a single worklet"""
+        try:
+            await sio.emit(
+                f"{state.thread_id}/status_update",
+                {"message": f"Ranking references for worklet: {worklet.title}..."},
+            )
+            if not worklet.references or len(worklet.references) == 0:
+                return worklet
+
+            prompt = build_reference_ranking_prompt(worklet)
+
+            result: ReferenceSortingResult = await invoke_llm(
+                gpu_model=llm_config.model,
+                response_schema=ReferenceSortingResult,
+                contents=prompt,
+                port=llm_config.port,
+            )
+
+            sorted_indices = result.sorted_indices
+            sorted_references = [
+                worklet.references[i]
+                for i in sorted_indices
+                if i < len(worklet.references)
+            ]
+            worklet.references = sorted_references
+            worklet = fix_dashes(worklet)
+            print(f"Ranked references for worklet '{worklet.title}': {sorted_indices}")
+            return worklet
+        except Exception as e:
+            print(f"Error ranking references for worklet '{worklet.title}': {e}")
+            # Return worklet unchanged if ranking fails
+            return worklet
+
     try:
-        for worklet in state.worklets:
-            try:
-                await sio.emit(
-                    f"{state.thread_id}/status_update",
-                    {"message": f"Ranking references for worklet: {worklet.title}..."},
-                )
-                if not worklet.references or len(worklet.references) == 0:
-                    continue
+        # Parallelize ranking, alternating between the two ranking LLM configs
+        tasks = []
+        for idx, worklet in enumerate(state.worklets):
+            # Alternate between RANKING_LLM1 and RANKING_LLM2 to keep both ports busy
+            llm_config = (
+                REFERENCE_RANKING_LLM if idx % 2 == 0 else REFERENCE_RANKING_LLM2
+            )
+            tasks.append(rank_single_worklet(worklet, llm_config))
 
-                prompt = build_reference_ranking_prompt(worklet)
+        # Process all rankings in parallel
+        state.worklets = await asyncio.gather(*tasks)
 
-                result: ReferenceSortingResult = await invoke_llm(
-                    gpu_model=REFERENCE_RANKING_LLM.model,
-                    response_schema=ReferenceSortingResult,
-                    contents=prompt,
-                    port=REFERENCE_RANKING_LLM.port,
-                )
-
-                sorted_indices = result.sorted_indices
-                sorted_references = [
-                    worklet.references[i] for i in sorted_indices if i < len(worklet.references)
-                ]
-                worklet.references = sorted_references
-                worklet = fix_dashes(worklet)
-                print(f"Ranked references for worklet '{worklet.title}': {sorted_indices}")
-            except Exception as e:
-                print(f"Error ranking references for worklet '{worklet.title}': {e}")
-                # Leave worklet.references unchanged for this worklet
-                continue
+        print(f"Reference ranking took {time.time() - s:.2f} seconds")
     except Exception as e:
         print(f"Error in rank_references function: {e}")
         print("Continuing without ranking references.")
         # Leave all references unchanged
-    
+
     return state
 
 
