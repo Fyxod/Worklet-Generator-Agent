@@ -1,9 +1,12 @@
 import tiktoken
+from core.constants import CPU_MODEL
+
+map = {
+    "qwen3:4b": "cl100k_base",
+    "qwen3:8b": "cl100k_base",
+}
 
 
 def count_tokens(text: str) -> int:
-    """
-    Approximate Qwen 3 (4B) token count using cl100k_base encoding.
-    """
-    encoding = tiktoken.get_encoding("cl100k_base")
+    encoding = tiktoken.get_encoding(map.get(CPU_MODEL, "cl100k_base"))
     return len(encoding.encode(text))

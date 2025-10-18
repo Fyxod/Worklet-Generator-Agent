@@ -23,6 +23,30 @@ def compress_main_prompt(
     if max_tokens <= 0:
         raise ValueError("max_tokens must be greater than prompt_offset")
 
+    # --- Early check: if already fits, return unchanged ---
+    total_tokens_initial = (
+        count_tokens(state.custom_prompt or "")
+        + sum(
+            count_tokens(d.full_text)
+            for d in (getattr(state.parsed_data, "documents", []) or [])
+        )
+        + sum(count_tokens(str(l)) for l in (state.links_data or []))
+        + sum(count_tokens(str(w)) for w in (state.web_search_results or []))
+        + count_tokens(
+            " ".join(state.keywords_domains.keywords if state.keywords_domains else [])
+        )
+        + count_tokens(
+            " ".join(state.keywords_domains.domains if state.keywords_domains else [])
+        )
+    )
+
+    if total_tokens_initial <= max_tokens:
+        if verbose:
+            print(
+                f"Content already fits within {max_tokens} tokens ({total_tokens_initial}). No compression needed."
+            )
+        return state
+
     def trim_text(text: str, budget: int, aggressiveness: float) -> str:
         """Deterministic compressor: keep start + end, drop middle."""
         tokens = count_tokens(text)

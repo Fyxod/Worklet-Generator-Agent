@@ -2,7 +2,7 @@ from core.models.ollama_config import OllamaLLMConfig
 
 # SETTINGS
 SWITCHES = {
-    "GENERATE_KEYWORDS_DOMAINS": True,  # Whether to extract keywords and domains from input
+    "EXTRACT_KEYWORDS_DOMAINS": True,  # Whether to extract keywords and domains from input
     "GENERATE_KEYWORD": True,  # Whether to generate appropriate keywords for reference search(uses worklet title as default otherwise)
     "RANK_REFERENCES": False,  # Whether to rank references based on relevance
     "FALLBACK_TO_GEMINI": True,  # Fallback to Gemini if Ollama fails
@@ -17,7 +17,7 @@ CPU_MODEL = "qwen3:8b"
 KEYWORD_DOMAIN_EXTRACTION_LLM = OllamaLLMConfig(model=CPU_MODEL, port=PORT)
 WORKLET_GENERATOR_LLM = OllamaLLMConfig(model=CPU_MODEL, port=PORT)
 REFERENCE_KEYWORD_LLM = OllamaLLMConfig(model=CPU_MODEL, port=PORT)
-REFERENCE_SORT_LLM = OllamaLLMConfig(model=CPU_MODEL, port=PORT)
+REFERENCE_RANKING_LLM = OllamaLLMConfig(model=CPU_MODEL, port=PORT)
 
 # Fallback LLM models
 # Used if SWITCHES["FALLBACK_TO_GEMINI"] = True

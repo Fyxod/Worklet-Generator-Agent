@@ -1,6 +1,7 @@
 import asyncio
 import json
 from app.socket_handler import sio
+from core.constants import SWITCHES
 
 pending_responses = {}
 
@@ -15,10 +16,19 @@ async def get_approved_items(domains, keywords, thread_id: str):
         if thread_id in pending_responses and not pending_responses[thread_id].done():
             pending_responses[thread_id].set_result(data)
 
-    await sio.emit(f"{thread_id}/topic_approval", {"domains": domains, "keywords": keywords})
+    if not SWITCHES["EXTRACT_KEYWORDS_DOMAINS"]:
+        message = "Keyword and domain extraction is disabled."
+    else:
+        message = "Please review and approve the following domains and keywords for the worklet generation process."
+
+    await sio.emit(
+        f"{thread_id}/topic_approval",
+        {"domains": domains, "keywords": keywords},
+        # {"domains": domains, "keywords": keywords, "message": message},
+    )
     try:
         response = await asyncio.wait_for(future, timeout=1800)  # 30 minutes timeout
-        
+
         with open("debug/approved_topics.txt", "w", encoding="utf-8") as f:
             f.write(str(response))
 
@@ -29,16 +39,20 @@ async def get_approved_items(domains, keywords, thread_id: str):
         approved_domains = response.get("domains", {}) if response else {}
         approved_keywords = response.get("keywords", {}) if response else {}
     except asyncio.TimeoutError:
-        print(f"Timeout: No response received from client {thread_id} after 30 minutes.")
+        print(
+            f"Timeout: No response received from client {thread_id} after 30 minutes."
+        )
         approved_domains = {}
         approved_keywords = {}
     except Exception as e:
-        print(f"An error occurred while waiting for response from client {thread_id}: {e}")
+        print(
+            f"An error occurred while waiting for response from client {thread_id}: {e}"
+        )
         approved_domains = {}
         approved_keywords = {}
     finally:
         pending_responses.pop(thread_id, None)
-        sio.handlers.get('/', {}).pop(f"{thread_id}/topic_response", None)
+        sio.handlers.get("/", {}).pop(f"{thread_id}/topic_response", None)
 
     final_domains = [
         domain

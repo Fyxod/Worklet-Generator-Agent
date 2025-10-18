@@ -1,10 +1,12 @@
 from core.llm.prompts.extraction_prompt import keyword_domain_extraction_prompt
 from core.llm.prompts.main_prompt import unified_problem_generation_prompt
+from core.llm.prompts.reference_ranking_prompt import reference_ranking_prompt
 import asyncio
-from core.utils.compress_prompt import compress_main_prompt
+from core.utils.compress_prompt import compress_main_prompt, compress_references
 
 from pipeline.state import AgentState
 from pipeline.tools.search import search_tavily as search_tool
+from core.models.worklet import Worklet
 
 
 async def parallel_search(queries):
@@ -40,11 +42,11 @@ async def parallel_search(queries):
     return cleaned_results
 
 
-def build_main_prompt(state: AgentState) -> str:
+def build_main_prompt(state: AgentState) -> list:
     modified_state: AgentState = compress_main_prompt(
         state.model_copy(),
         max_tokens=4000,
-        prompt_offset=750,
+        prompt_offset=1100,
         pass_limit=10,
         verbose=True,
     )
@@ -83,12 +85,12 @@ def build_main_prompt(state: AgentState) -> str:
     )
 
 
-def build_extraction_prompt(state: AgentState) -> str:
+def build_extraction_prompt(state: AgentState) -> list:
 
     modified_state: AgentState = compress_main_prompt(
         state.model_copy(),
         max_tokens=4000,
-        prompt_offset=400,
+        prompt_offset=600,
         pass_limit=10,
         verbose=False,
     )
@@ -107,4 +109,23 @@ def build_extraction_prompt(state: AgentState) -> str:
         worklet_data=worklet_data,
         links_data=modified_state.links_data,
         custom_prompt=modified_state.custom_prompt,
+    )
+
+
+def build_reference_ranking_prompt(worklet: Worklet) -> list:
+
+    modified_references = compress_references(
+        references=worklet.references,
+        max_tokens=4000,
+        prompt_offset=400,
+        pass_limit=10,
+        verbose=False,
+    )
+
+    references = {}
+    for idx, ref in enumerate(modified_references):
+        references[idx] = ref.model_dump()
+
+    return reference_ranking_prompt(
+        title=worklet.title, description=worklet.description, references=references
     )

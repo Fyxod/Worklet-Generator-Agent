@@ -1,11 +1,13 @@
 import json
 import time
 import os
+import asyncio
 
 from pipeline.graph_helpers import (
     build_extraction_prompt,
     build_main_prompt,
     parallel_search,
+    build_reference_ranking_prompt,
 )
 from pipeline.state import AgentState
 from pipeline.tools.search import search_tavily as search_tool
@@ -19,6 +21,7 @@ from core.llm.outputs import (
     WorkletGenerationResult,
     ReferenceKeywordResult,
     ReferenceSortingResult,
+    Sources,
 )
 from core.utils.compress_prompt import compress_references
 from core.references.generate_references import generate_references
@@ -27,13 +30,13 @@ from core.constants import (
     KEYWORD_DOMAIN_EXTRACTION_LLM,
     WORKLET_GENERATOR_LLM,
     REFERENCE_KEYWORD_LLM,
-    REFERENCE_SORT_LLM,
+    REFERENCE_RANKING_LLM,
 )
 from core.services.upload_files import upload_files
 from core.parsers.process_files import process_files
 from core.models.document import Documents
 from pipeline.tools.extract import extract_links
-from core.llm.prompts.reference_sorting_prompt import reference_sorting_prompt
+from core.llm.prompts.reference_ranking_prompt import reference_ranking_prompt
 from core.llm.prompts.reference_keyword_prompt import (
     reference_search_keyword_prompt as keyword_prompt,
 )
@@ -46,31 +49,52 @@ from core.utils.fix_dashes import fix_dashes
 os.makedirs("debug", exist_ok=True)
 
 
-# parallelize both of these
 async def process_input(state: AgentState) -> AgentState:
     print(state.links)
     print(type(state.links))
     print("before this" * 50)
     s = time.time()
-    if state.files and len(state.files) > 0:
-        await sio.emit(
-            "status_update", {"message": "Uploading and processing files..."}
-        )
-        files_data = await upload_files(state.files, state.thread_id)
-        if not files_data:
-            print({"error": "No files uploaded or failed to upload files"})
-        print(f"Raw file paths: {files_data}")
-        parsed_data: Documents = await process_files(files_data, state.thread_id)
-        if not parsed_data.documents:
-            return {"error": "No documents could be processed successfully"}
-        state.parsed_data = parsed_data
 
-    if state.links and len(state.links) > 0:
-        await sio.emit("status_update", {"message": "Extracting data from links..."})
-        links_data = await extract_links(state.links)
-        if not links_data:
-            print({"error": "No links data extracted or failed to extract links data"})
-        print(f"Extracted links data: {links_data}")
+    async def process_files_task():
+        if state.files and len(state.files) > 0:
+            await sio.emit(
+                "status_update", {"message": "Uploading and processing files..."}
+            )
+            files_data = await upload_files(state.files, state.thread_id)
+            if not files_data:
+                print({"error": "No files uploaded or failed to upload files"})
+                return None
+            print(f"Raw file paths: {files_data}")
+            parsed_data: Documents = await process_files(files_data, state.thread_id)
+            if not parsed_data.documents:
+                print({"error": "No documents could be processed successfully"})
+                return None
+            return parsed_data
+        return None
+
+    async def process_links_task():
+        if state.links and len(state.links) > 0:
+            await sio.emit(
+                "status_update", {"message": "Extracting data from links..."}
+            )
+            links_data = await extract_links(state.links)
+            if not links_data:
+                print(
+                    {"error": "No links data extracted or failed to extract links data"}
+                )
+                return None
+            print(f"Extracted links data: {links_data}")
+            return links_data
+        return None
+
+    # Run both tasks in parallel
+    parsed_data, links_data = await asyncio.gather(
+        process_files_task(), process_links_task()
+    )
+
+    if parsed_data:
+        state.parsed_data = parsed_data
+    if links_data:
         state.links_data = links_data
 
     print(f"Input processing took {time.time() - s:.2f} seconds")
@@ -79,23 +103,31 @@ async def process_input(state: AgentState) -> AgentState:
 
 async def extract_keywords_domains(state: AgentState) -> AgentState:
     s = time.time()
-    prompt = build_extraction_prompt(state)
-    with open("debug/extraction_prompt.txt", "w", encoding="utf-8") as f:
-        f.write(str(prompt))
+    if SWITCHES["EXTRACT_KEYWORDS_DOMAINS"]:
+        prompt = build_extraction_prompt(state)
+        with open("debug/extraction_prompt.txt", "w", encoding="utf-8") as f:
+            f.write(str(prompt))
 
-    await sio.emit(
-        f"{state.thread_id}/status_update",
-        {"message": "Extracting keywords and domains..."},
-    )
+        await sio.emit(
+            f"{state.thread_id}/status_update",
+            {"message": "Extracting keywords and domains..."},
+        )
 
-    result: KeywordsExtractionResult = await invoke_llm(
-        ollama_model=KEYWORD_DOMAIN_EXTRACTION_LLM.model,
-        response_schema=KeywordsExtractionResult,
-        contents=prompt,
-        port=KEYWORD_DOMAIN_EXTRACTION_LLM.port,
-    )
-    with open("debug/keywords_domains.json", "w", encoding="utf-8") as f:
-        f.write(json.dumps(result.model_dump(), indent=2))
+        result: KeywordsExtractionResult = await invoke_llm(
+            ollama_model=KEYWORD_DOMAIN_EXTRACTION_LLM.model,
+            response_schema=KeywordsExtractionResult,
+            contents=prompt,
+            port=KEYWORD_DOMAIN_EXTRACTION_LLM.port,
+        )
+        with open("debug/keywords_domains.json", "w", encoding="utf-8") as f:
+            f.write(json.dumps(result.model_dump(), indent=2))
+
+    else:
+        # Use empty keywords and domains if extraction is disabled
+        result = KeywordsExtractionResult(
+            keywords=Sources(worklet=[], link=[], custom_prompt=[]),
+            domains=Sources(worklet=[], link=[], custom_prompt=[]),
+        )
 
     updated_domains, updated_keywords = await get_approved_items(
         result.domains.model_dump(), result.keywords.model_dump(), state.thread_id
@@ -215,7 +247,6 @@ async def references(state: AgentState) -> AgentState:
     return state
 
 
-# remove this for the cpu version
 async def rank_references(state: AgentState) -> AgentState:
     if not SWITCHES["RANK_REFERENCES"]:
         return state
@@ -228,28 +259,22 @@ async def rank_references(state: AgentState) -> AgentState:
         if not worklet.references or len(worklet.references) == 0:
             continue
 
-        modified_references = compress_references(worklet.references)
-
-        references = {}
-        for idx, ref in enumerate(modified_references):
-            references[idx] = ref.model_dump()
-        prompt = reference_sorting_prompt(
-            title=worklet.title, description=worklet.description, references=references
-        )
+        prompt = build_reference_ranking_prompt(worklet)
 
         result: ReferenceSortingResult = await invoke_llm(
-            ollama_model=REFERENCE_SORT_LLM.model,
+            ollama_model=REFERENCE_RANKING_LLM.model,
             response_schema=ReferenceSortingResult,
             contents=prompt,
-            port=REFERENCE_SORT_LLM.port,
+            port=REFERENCE_RANKING_LLM.port,
         )
+
         sorted_indices = result.sorted_indices
         sorted_references = [
             worklet.references[i] for i in sorted_indices if i < len(worklet.references)
         ]
         worklet.references = sorted_references
         worklet = fix_dashes(worklet)
-        print(f"Sorted references for worklet '{worklet.title}': {sorted_indices}")
+        print(f"Ranked references for worklet '{worklet.title}': {sorted_indices}")
     return state
 
 
