@@ -64,11 +64,13 @@ async def invoke_llm(
 
     for attempt in range(1, MAX_RETRIES + 1):
         print(f"\n=== Attempt {attempt}/{MAX_RETRIES} ===")
+        print(port ,ollama_model)
 
         # === 1. Ollama CPU ===
         if ollama_model:
             try:
                 print("Trying Ollama CPU...")
+                print(port, ollama_model)
                 ollama_llm = MyServerLLM(model=ollama_model, port=port)
                 s = time.time()
                 llm_output = await asyncio.to_thread(ollama_llm._call, prompt)
@@ -78,6 +80,7 @@ async def invoke_llm(
                 print("Success via Ollama CPU")
                 return structured
             except Exception as e:
+                print(f"error occ=")
                 print(f"Ollama server failed: {e}")
 
         # === 2. GEMINI FALLBACK ===
