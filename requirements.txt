@@ -1,5 +1,4 @@
 fastapi
-langchain
 langchain-community
 tavily-python
 langchain-ollama
@@ -33,3 +32,4 @@ parsel
 tiktoken
 pandas
 xlrd
+langchain_core

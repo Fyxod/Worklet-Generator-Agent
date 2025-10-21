@@ -21,6 +21,7 @@ develop-eggs/
 dist/
 downloads/
 worklets/
+.virtual
 eggs/
 .v
 .eggs/

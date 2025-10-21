@@ -3,10 +3,11 @@ import time
 from core.config import settings
 from google import genai
 from openai import AsyncOpenAI
-from langchain.output_parsers import PydanticOutputParser
+# from langchain.output_parsers import PydanticOutputParser  older version
+from langchain_core.output_parsers import PydanticOutputParser
 from core.constants import SWITCHES, FALLBACK_OPENAI_MODEL, FALLBACK_GEMINI_MODEL
 from core.llm.custom_llm import MyServerLLM
-import copy
+import copyz``
 
 
 def sanitize_schema(schema_dict):

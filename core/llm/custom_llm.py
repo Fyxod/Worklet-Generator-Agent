@@ -1,11 +1,11 @@
 from langchain_ollama import ChatOllama
-from langchain.llms.base import LLM
+from langchain_core.language_models import BaseLanguageModel
 from typing import Optional, List
 from pydantic import PrivateAttr
 import re
 
 
-class MyServerLLM(LLM):
+class MyServerLLM(BaseLanguageModel):  # inherit from BaseLanguageModel
     """
     Custom LLM wrapper using ChatOllama to call a locally running Ollama model.
     """
@@ -16,8 +16,10 @@ class MyServerLLM(LLM):
 
     def __init__(self, model: str, port: int = 11434, **kwargs):
         print(f"Initializing MyOllamaLLM with model={model} at port={port}")
-        super().__init__(model=model, port=port, **kwargs)
+        super().__init__(**kwargs)  # pass kwargs to BaseLanguageModel
 
+        self.model = model
+        self.port = port
         self._client = ChatOllama(
             model=model, base_url=f"http://localhost:{port}", timeout=1000, **kwargs
         )
