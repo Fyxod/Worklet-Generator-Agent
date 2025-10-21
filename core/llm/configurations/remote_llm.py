@@ -1,5 +1,5 @@
 import requests
-from langchain_core.language_models import BaseLanguageModel
+from langchain_core.language_models import LLM
 from typing import Optional, List
 import re
 from core.config import settings
@@ -7,7 +7,7 @@ from core.config import settings
 QUERY_URL = settings.QUERY_URL
 
 
-class MyServerLLM(BaseLanguageModel):
+class MyServerLLM(LLM):
     """
     Custom LLM wrapper for a GPU-hosted LLM accessible via HTTP.
     Supports LangChain-style calls.
