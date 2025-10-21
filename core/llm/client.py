@@ -3,15 +3,23 @@ import time
 from core.config import settings
 from google import genai
 from openai import AsyncOpenAI
-from langchain.output_parsers import PydanticOutputParser
+# from langchain.output_parsers import PydanticOutputParser  older version
+from langchain_core.output_parsers import PydanticOutputParser
 from core.constants import SWITCHES, FALLBACK_OPENAI_MODEL, FALLBACK_GEMINI_MODEL
+from core.llm.custom_llm import MyServerLLM
+import copyz``
 
-if SWITCHES["REMOTE_GPU"]:
-    import core.llm.configurations.remote_llm as llm_module
-else:
-    import core.llm.configurations.local_llm as llm_module
 
-MyServerLLM = llm_module.MyServerLLM
+def sanitize_schema(schema_dict):
+    if isinstance(schema_dict, dict):
+        schema_dict.pop("additionalProperties", None)
+        for v in schema_dict.values():
+            sanitize_schema(v)
+    elif isinstance(schema_dict, list):
+        for v in schema_dict:
+            sanitize_schema(v)
+    return schema_dict
+
 
 API_KEYS = [
     settings.API_KEY_1,
@@ -28,7 +36,7 @@ count = 0
 
 
 async def invoke_llm(
-    gpu_model,
+    ollama_model,
     response_schema,
     contents,
     port=11434,
@@ -36,7 +44,7 @@ async def invoke_llm(
 ):
     """
     Unified structured LLM invocation with retries and fallbacks:
-    - GPU server
+    - Local CPU
     - Gemini API
     - OpenAI API
     Each returns parsed structured data using the same logic.
@@ -57,33 +65,20 @@ async def invoke_llm(
     for attempt in range(1, MAX_RETRIES + 1):
         print(f"\n=== Attempt {attempt}/{MAX_RETRIES} ===")
 
-        # === 1. GPU SERVER ===
-        if gpu_model:
+        # === 1. Ollama CPU ===
+        if ollama_model:
             try:
-                print("Trying GPU server...")
-                gpu_llm = MyServerLLM(model=gpu_model, port=port)
+                print("Trying Ollama CPU...")
+                ollama_llm = MyServerLLM(model=ollama_model, port=port)
                 s = time.time()
-                llm_output = await asyncio.to_thread(gpu_llm._call, prompt)
+                llm_output = await asyncio.to_thread(ollama_llm._call, prompt)
                 e = time.time()
-                print(f"Success via GPU server, LLM call took {e - s:.2f}s")
+                print(f"Ollama LLM call took {e - s:.2f}s")
                 structured = parser.parse(llm_output)
+                print("Success via Ollama CPU")
                 return structured
             except Exception as e:
-                print(f"GPU server failed failed at port {port}: {e}")
-
-            if port == 11435:
-                temp_port = 11434
-                try:
-                    print(f"Retrying GPU server on alternate port {temp_port}...")
-                    gpu_llm = MyServerLLM(model=gpu_model, port=temp_port)
-                    s = time.time()
-                    llm_output = await asyncio.to_thread(gpu_llm._call, prompt)
-                    e = time.time()
-                    print(f"Success via GPU server, LLM call took {e - s:.2f}s")
-                    structured = parser.parse(llm_output)
-                    return structured
-                except Exception as e:
-                    print(f"GPU server failed at alternate port {temp_port}: {e}")
+                print(f"Ollama server failed: {e}")
 
         # === 2. GEMINI FALLBACK ===
         if SWITCHES["FALLBACK_TO_GEMINI"]:
@@ -93,7 +88,7 @@ async def invoke_llm(
                 api_key = API_KEYS[count % len(API_KEYS)]
                 count = (count + 1) % len(API_KEYS)
                 client = genai.Client(api_key=api_key)
-                s = time.time()
+
                 try:
                     config = genai.types.GenerateContentConfig(
                         temperature=0.2,
@@ -124,9 +119,9 @@ async def invoke_llm(
                     except Exception:
                         raw_output = str(response)
 
+                    print("Gemini raw output:\n", raw_output[:500])
                     structured = parser.parse(raw_output)
-                    e = time.time()
-                    print(f"Success via Gemini, LLM call took {e - s:.2f}s")
+                    print("Success via Gemini")
                     return structured
 
                 except asyncio.TimeoutError:
@@ -139,7 +134,7 @@ async def invoke_llm(
         if SWITCHES["FALLBACK_TO_OPENAI"]:
             try:
                 print("Falling back to OpenAI...")
-                s = time.time()
+
                 response = await openai_client.chat.completions.create(
                     model=FALLBACK_OPENAI_MODEL,
                     messages=[{"role": "user", "content": prompt}],
@@ -147,9 +142,9 @@ async def invoke_llm(
                 )
 
                 raw_output = response.choices[0].message.content
+                print("OpenAI raw output:\n", raw_output[:500])
                 structured = parser.parse(raw_output)
-                e = time.time()
-                print(f"Success via OpenAI, LLM call took {e - s:.2f}s")
+                print("Success via OpenAI")
                 return structured
 
             except Exception as e:

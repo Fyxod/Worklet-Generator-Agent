@@ -6,7 +6,7 @@ cpuvenv
 *.pptx
 *.pdf
 *.json
-.v
+
 #poetry
 # Distribution / packaging
 latest_generated.json
@@ -21,7 +21,9 @@ develop-eggs/
 dist/
 downloads/
 worklets/
+.virtual
 eggs/
+.v
 .eggs/
 lib64/
 parts/
