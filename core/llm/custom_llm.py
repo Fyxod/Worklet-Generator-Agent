@@ -1,20 +1,41 @@
-import asyncio
 import re
-from typing import Optional, List
-from pydantic import PrivateAttr
-from langchain_core.language_models import BaseLanguageModel
-from langchain_core.outputs import LLMResult
-from langchain_core.messages import HumanMessage  # LangChain 1.0 replacement for PromptValue
+from typing import Optional, List, Tuple, Dict
 from langchain_ollama import ChatOllama
+from langchain_core.language_models import LLM
+from pydantic import PrivateAttr
+import threading
+from contextlib import contextmanager
+
+# Global dictionary of locks per (model, port)
+_locks: Dict[Tuple[str, int], threading.Lock] = {}
+_locks_global_lock = threading.Lock()  # Protects access to the _locks dict
 
 
-class MyServerLLM(BaseLanguageModel):
+@contextmanager
+def model_port_lock(model: str, port: int):
     """
-    Custom wrapper for a locally running Ollama model.
+    Context manager that ensures only one request per (model, port)
+    is processed at a time. Blocks others until the lock is released.
+    """
+    key = (model, port)
 
-    Updated for LangChain 1.0:
-        - PromptValue removed → use HumanMessage or str
-        - Added required methods: invoke(), generate_prompt(), agenerate_prompt()
+    # Ensure thread-safe creation of locks
+    with _locks_global_lock:
+        if key not in _locks:
+            _locks[key] = threading.Lock()
+
+    lock = _locks[key]
+    lock.acquire()
+    try:
+        yield
+    finally:
+        lock.release()
+
+
+class MyServerLLM(LLM):
+    """
+    Custom LLM wrapper using ChatOllama to call a locally running Ollama model.
+    Ensures only one request per (model, port) is processed at a time.
     """
 
     model: str
@@ -25,64 +46,26 @@ class MyServerLLM(BaseLanguageModel):
         print(f"Initializing MyOllamaLLM with model={model} at port={port}")
         super().__init__(model=model, port=port, **kwargs)
 
-        self.model = model
-        self.port = port
         self._client = ChatOllama(
-            model=self.model,
-            base_url=f"http://localhost:{self.port}",
-            timeout=1000,
+            model=model, base_url=f"http://localhost:{port}", timeout=1000, **kwargs
         )
-
-    
 
     @property
     def _llm_type(self) -> str:
-        """Used by LangChain to identify the LLM type"""
         return "ollama_local_llm"
 
     def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
-        try:
-            response = self._client.invoke(prompt, stop=stop)
-            # Remove <think> tags from output
-            cleaned_text = re.sub(
-                r"<think>.*?</think>", "", response.content, flags=re.DOTALL
-            )
-            return cleaned_text
-        except Exception as e:
-            raise RuntimeError(f"Failed to call Ollama locally: {e}") from e
-
-    # ─────────────────────────────────────────────────────────────
-    # REQUIRED NEW METHODS for LangChain 1.0
-    # ─────────────────────────────────────────────────────────────
-
-    def invoke(self, input, **kwargs):
         """
-        Main entry point for LangChain Runnable pipelines.
-
-        Accepts either:
-        - str input
-        - HumanMessage object (LangChain 1.0)
+        Call the local Ollama model using ChatOllama.
+        Blocks concurrent requests for the same (model, port).
         """
-        if isinstance(input, HumanMessage):
-            text = input.content
-        else:
-            text = str(input)
-        return self._call(text)
-
-    def generate_prompt(self, prompt: HumanMessage, **kwargs) -> LLMResult:
-        """
-        Synchronous handling of HumanMessage prompts.
-        Converts HumanMessage → text → _call() → LLMResult
-        """
-        text = prompt.content
-        output = self._call(text)
-        return LLMResult(generations=[[{"text": output}]])
-
-    async def agenerate_prompt(self, prompt: HumanMessage, **kwargs) -> LLMResult:
-        """
-        Async handling of HumanMessage prompts.
-        Runs _call() in a background thread.
-        """
-        text = prompt.content
-        output = await asyncio.to_thread(self._call, text)
-        return LLMResult(generations=[[{"text": output}]])
+        with model_port_lock(self.model, self.port):
+            print(f"Processing request for model={self.model}, port={self.port}")
+            try:
+                response = self._client.invoke(prompt, stop=stop)
+                cleaned_text = re.sub(
+                    r"<think>.*?</think>", "", response.content, flags=re.DOTALL
+                )
+                return cleaned_text
+            except Exception as e:
+                raise RuntimeError(f"Failed to call Ollama locally: {e}") from e
