@@ -23,7 +23,7 @@ from core.llm.outputs import (
     WorkletGenerationResult,
     ReferenceKeywordResult,
     ReferenceSortingResult,
-    Sources
+    Sources,
 )
 from core.references.generate_references import generate_references
 from core.constants import SWITCHES, WEB_SEARCH, REFERENCES
@@ -110,13 +110,13 @@ async def extract_keywords_domains(state: AgentState) -> AgentState:
         with open("debug/extraction_prompt.txt", "w", encoding="utf-8") as f:
             f.write(str(prompt))
 
-        await sio.emit(
-            f"{state.thread_id}/status_update",
+        await update_message(
             {"message": "Extracting keywords and domains..."},
+            topic=f"{state.thread_id}/status_update",
         )
 
         result: KeywordsExtractionResult = await invoke_llm(
-            ollama_model=KEYWORD_DOMAIN_EXTRACTION_LLM.model,
+            gpu_model=KEYWORD_DOMAIN_EXTRACTION_LLM.model,
             response_schema=KeywordsExtractionResult,
             contents=prompt,
             port=KEYWORD_DOMAIN_EXTRACTION_LLM.port,
