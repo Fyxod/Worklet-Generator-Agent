@@ -50,23 +50,19 @@ async def invoke_llm(
 
     for attempt in range(1, MAX_RETRIES + 1):
         print(f"\n=== Attempt {attempt}/{MAX_RETRIES} ===")
-        print(port, ollama_model)
 
         # === 1. Ollama CPU ===
         if ollama_model:
             try:
                 print("Trying Ollama CPU...")
-                print(port, ollama_model)
                 ollama_llm = MyServerLLM(model=ollama_model, port=port)
                 s = time.time()
                 llm_output = await asyncio.to_thread(ollama_llm._call, prompt)
                 e = time.time()
-                print(f"Ollama LLM call took {e - s:.2f}s")
+                print(f"Success via Ollama CPU, LLM call took {e - s:.2f}s")
                 structured = parser.parse(llm_output)
-                print("Success via Ollama CPU")
                 return structured
             except Exception as e:
-                print(f"error occ=")
                 print(f"Ollama server failed: {e}")
 
         # === 2. GEMINI FALLBACK ===
@@ -77,7 +73,7 @@ async def invoke_llm(
                 api_key = API_KEYS[count % len(API_KEYS)]
                 count = (count + 1) % len(API_KEYS)
                 client = genai.Client(api_key=api_key)
-
+                s = time.time()
                 try:
                     config = genai.types.GenerateContentConfig(
                         temperature=0.2,
@@ -108,9 +104,9 @@ async def invoke_llm(
                     except Exception:
                         raw_output = str(response)
 
-                    print("Gemini raw output:\n", raw_output[:500])
                     structured = parser.parse(raw_output)
-                    print("Success via Gemini")
+                    e = time.time()
+                    print(f"Success via Gemini, LLM call took {e - s:.2f}s")
                     return structured
 
                 except asyncio.TimeoutError:
@@ -123,7 +119,7 @@ async def invoke_llm(
         if SWITCHES["FALLBACK_TO_OPENAI"]:
             try:
                 print("Falling back to OpenAI...")
-
+                s = time.time()
                 response = await openai_client.chat.completions.create(
                     model=FALLBACK_OPENAI_MODEL,
                     messages=[{"role": "user", "content": prompt}],
@@ -131,9 +127,9 @@ async def invoke_llm(
                 )
 
                 raw_output = response.choices[0].message.content
-                print("OpenAI raw output:\n", raw_output[:500])
                 structured = parser.parse(raw_output)
-                print("Success via OpenAI")
+                e = time.time()
+                print(f"Success via OpenAI, LLM call took {e - s:.2f}s")
                 return structured
 
             except Exception as e:
