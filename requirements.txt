@@ -33,3 +33,6 @@ tiktoken
 pandas
 xlrd
 langchain_core
+weasyprint
+xlrd
+openpyxl

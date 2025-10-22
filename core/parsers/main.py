@@ -127,18 +127,20 @@ async def extract_document(path, title="Untitled", file_name=None,  thread_id=No
             print(f"Error processing Markdown file {file_name}: {str(e)}")
             return None
 
-    if ext in {".xls", ".csv"}:
+    if ext in {".xls", '.xlsx',".csv"}:
         try:
 
-            # Read Excel or CSV file
-            if ext == ".csv":
-                df = pd.read_csv(file_path)
+            if ext == ".xlsx":
+                df = pd.read_excel(file_path, engine='openpyxl')                
+            elif ext == ".xls":
+                df = pd.read_excel(file_path, engine='xlrd')
             else:
-                df = pd.read_excel(file_path)
+                df = pd.read_csv(file_path)
 
             # Convert to plain text
             text = df.to_string(index=False)
-
+            print("*"*60)
+            print(text)
             doc_id = str(uuid.uuid4())
 
             return Document(
