@@ -14,7 +14,6 @@ uvicorn[standard]
 aiofiles
 google-genai
 openai
-aiofiles
 PyMuPDF
 python-pptx
 beautifulsoup4
@@ -28,8 +27,9 @@ selenium
 selenium-stealth
 webdriver_manager
 selectolax
-pandas
 parsel
 tiktoken
 pandas
 xlrd
+openpyxl
+tabulate

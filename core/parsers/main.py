@@ -14,47 +14,55 @@ import re
 from app.socket_handler import sio
 from core.parsers.image import image_parser
 from core.models.document import Document, Page
-
+from core.parsers.extensions import SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS
 from pptx import Presentation
+import traceback
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
 
-import traceback
-# Extensions
-IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.gif'}
-SUPPORTED_EXTENSIONS = {
-    '.pdf', '.docx', '.rtf', '.txt', '.epub', '.odt', '.ppt', '.pptx',
-    '.xls', '.xlsx', '.csv', '.html', '.xml', '.md', *IMAGE_EXTENSIONS
-}
 
-async def extract_document(path, title="Untitled", file_name=None,  thread_id=None):
+async def extract_document(path, title="Untitled", file_name=None, thread_id=None):
     start_time = time.time()
     file_path = path
     ext = Path(path).suffix.lower()
-    name, _ = os.path.splitext(file_name)
+    # Derive a safe base name even if file_name is None
+    try:
+        safe_file_name = file_name or os.path.basename(file_path)
+        name, _ = os.path.splitext(safe_file_name)
+    except Exception:
+        traceback.print_exc()
+        safe_file_name = os.path.basename(file_path)
+        name, _ = os.path.splitext(safe_file_name)
+
+    # Normalize thread to avoid crashing on None
+    thread_id = thread_id or "unknown_thread"
 
     if ext not in SUPPORTED_EXTENSIONS:
-        raise ValueError(f"Unsupported file type: {ext}")
+        print(f"Unsupported file type: {ext} for {safe_file_name}. Skipping.")
+        return None
 
     # --- Handle standalone images ---
     if ext in IMAGE_EXTENSIONS:
         try:
             text = await image_parser(file_path)
         except Exception as e:
-            print(f"Error processing image {file_name}: {str(e)}")
+            print(f"Error processing image {safe_file_name}: {str(e)}")
+            traceback.print_exc()
             return None
 
         doc_id = str(uuid.uuid4())
         end_time = time.time()
-        print(f"Time taken to process {file_name} main image: {end_time - start_time} seconds")
+        print(
+            f"Time taken to process {safe_file_name} main image: {end_time - start_time} seconds"
+        )
         return Document(
             id=doc_id,
             type=ext[1:],
-            file_name=file_name or os.path.basename(file_path),
+            file_name=safe_file_name,
             content=[Page(number=1, text=text)],
             title=title,
-            full_text=text
+            full_text=text,
         )
 
     # --- Handle Markdown files ---
@@ -64,43 +72,67 @@ async def extract_document(path, title="Untitled", file_name=None,  thread_id=No
                 md_text = f.read()
 
             # Convert markdown -> HTML -> plain text
-            html = markdown.markdown(md_text)
-            soup = BeautifulSoup(html, "html.parser")
-            plain_text = soup.get_text(separator="\n")
+            try:
+                html = markdown.markdown(md_text)
+            except Exception:
+                traceback.print_exc()
+                html = md_text  # fallback
+            try:
+                soup = BeautifulSoup(html, "html.parser")
+                plain_text = soup.get_text(separator="\n")
+            except Exception:
+                traceback.print_exc()
+                plain_text = md_text
 
             # Prepare image handling
             image_dir = f"data/threads/{thread_id}/images/{name}"
-            os.makedirs(image_dir, exist_ok=True)
+            try:
+                os.makedirs(image_dir, exist_ok=True)
+            except Exception:
+                traceback.print_exc()
 
             ocr_tasks = {}
             image_names = []
 
             # Regex to find Markdown image syntax: ![alt](path)
-            image_pattern = re.compile(r'!\[.*?\]\((.*?)\)')
+            image_pattern = re.compile(r"!\[.*?\]\((.*?)\)")
             matches = image_pattern.findall(md_text)
 
             page_text = plain_text
             for idx, img_path in enumerate(matches, start=1):
-                if not os.path.isabs(img_path):
-                    # make path relative to md file
-                    img_path = os.path.join(os.path.dirname(file_path), img_path)
+                try:
+                    resolved_path = img_path
+                    if not os.path.isabs(resolved_path):
+                        # make path relative to md file
+                        resolved_path = os.path.join(
+                            os.path.dirname(file_path), resolved_path
+                        )
 
-                if not os.path.exists(img_path):
-                    continue
+                    if not os.path.exists(resolved_path):
+                        print(f"Markdown image not found: {resolved_path}")
+                        continue
 
-                ext_img = Path(img_path).suffix.lstrip(".")
-                image_name = f"md_img{idx}.{ext_img}"
-                dest_path = os.path.join(image_dir, image_name)
+                    ext_img = Path(resolved_path).suffix.lstrip(".")
+                    image_name = f"md_img{idx}.{ext_img}"
+                    dest_path = os.path.join(image_dir, image_name)
 
-                # Copy image into project folder
-                shutil.copy(img_path, dest_path)
-                image_names.append(image_name)
+                    # Copy image into project folder
+                    try:
+                        shutil.copy(resolved_path, dest_path)
+                    except Exception:
+                        traceback.print_exc()
+                        continue
+                    image_names.append(image_name)
 
-                placeholder = f"{{PENDING_{image_name}}}"
-                page_text += f"\n\n[Image: {image_name}]\n{placeholder}"
+                    placeholder = f"{{PENDING_{image_name}}}"
+                    page_text += f"\n\n{placeholder}"
 
-                # Run OCR asynchronously
-                ocr_tasks[placeholder] = asyncio.create_task(image_parser(dest_path))
+                    # Run OCR asynchronously
+                    ocr_tasks[placeholder] = asyncio.create_task(
+                        image_parser(dest_path)
+                    )
+                except Exception:
+                    traceback.print_exc()
 
             # Wait for OCR tasks
             for placeholder, task in ocr_tasks.items():
@@ -108,6 +140,7 @@ async def extract_document(path, title="Untitled", file_name=None,  thread_id=No
                     image_text = await task
                 except Exception as e:
                     print(f"Error parsing Markdown image: {e}")
+                    traceback.print_exc()
                     image_text = "[Image OCR failed]"
 
                 page_text = page_text.replace(placeholder, image_text, 1)
@@ -117,190 +150,298 @@ async def extract_document(path, title="Untitled", file_name=None,  thread_id=No
             return Document(
                 id=doc_id,
                 type="markdown",
-                file_name=file_name or os.path.basename(file_path),
+                file_name=safe_file_name,
                 content=[Page(number=1, text=page_text, images=image_names)],
                 title=title,
-                full_text=md_text  # preserve original markdown
+                full_text=md_text,  # preserve original markdown
             )
 
         except Exception as e:
-            print(f"Error processing Markdown file {file_name}: {str(e)}")
+            print(f"Error processing Markdown file {safe_file_name}: {str(e)}")
+            traceback.print_exc()
             return None
 
-    if ext in {".xls", ".csv"}:
+    if ext in {".xls", ".xlsx", ".csv"}:
         try:
-
             # Read Excel or CSV file
-            if ext == ".csv":
-                df = pd.read_csv(file_path)
+            if ext == ".xlsx":
+                df = pd.read_excel(file_path, engine="openpyxl")
+            elif ext == ".xls":
+                df = pd.read_excel(file_path, engine="xlrd")
             else:
-                df = pd.read_excel(file_path)
+                df = pd.read_csv(file_path)
 
-            # Convert to plain text
-            text = df.to_string(index=False)
+            # Clean merged cells & empty rows
+            # df = df.ffill().dropna(how='all')
+
+            # Normalize newlines inside cells
+            df = df.applymap(
+                lambda x: str(x).replace("\n", " ") if isinstance(x, str) else x
+            )
+
+            try:
+                text = df.to_json(orient="records", lines=True)
+                # text = df.to_markdown(index=False)
+
+            except Exception:
+                print("Error converting DataFrame to string")
+                traceback.print_exc()
+                text = str(df)
+
+            # Optional: compact whitespace
+            text = re.sub(r"\s{2,}", " ", text).strip()
 
             doc_id = str(uuid.uuid4())
 
             return Document(
                 id=doc_id,
                 type="spreadsheet",
-                file_name=file_name or os.path.basename(file_path),
+                file_name=safe_file_name,
                 content=[Page(number=1, text=text)],
                 title=title,
                 full_text=text,
             )
 
         except Exception as e:
-            print(f"Error processing Excel/CSV file {file_name}: {str(e)}")
+            print(f"Error processing Excel/CSV file {safe_file_name}: {str(e)}")
+            traceback.print_exc()
             return None
-    
+
     # --- Handle PowerPoint files ---
     if ext in {".ppt", ".pptx"}:
-        prs = Presentation(file_path)
+        try:
+            prs = Presentation(file_path)
+        except Exception as e:
+            print(f"Error opening presentation {safe_file_name}: {e}")
+            traceback.print_exc()
+            return None
         pages = []
         combined_texts = []
         ocr_tasks = {}
         image_dir = f"data/threads/{thread_id}/images/{name}"
-        os.makedirs(image_dir, exist_ok=True)
+        try:
+            os.makedirs(image_dir, exist_ok=True)
+        except Exception:
+            traceback.print_exc()
 
-        for slide_number, slide in enumerate(prs.slides, start=1):
-            # Extract text
-            slide_text = []
-            for shape in slide.shapes:
-                if hasattr(shape, "text") and shape.text.strip():
-                    slide_text.append(shape.text.strip())
-            page_text = "\n".join(slide_text)
+        try:
+            for slide_number, slide in enumerate(prs.slides, start=1):
+                # Extract text
+                slide_text = []
+                for shape in slide.shapes:
+                    try:
+                        if (
+                            hasattr(shape, "text")
+                            and getattr(shape, "text", "").strip()
+                        ):
+                            slide_text.append(shape.text.strip())
+                    except Exception:
+                        traceback.print_exc()
+                page_text = "\n".join(slide_text)
 
-            image_names = []
+                image_names = []
 
-            # Extract images
-            for shape_index, shape in enumerate(slide.shapes, start=1):
-                if shape.shape_type == 13:  # PICTURE
-                    image = shape.image
-                    image_bytes = image.blob
-                    image_ext = image.ext
-                    image_name = f"slide{slide_number}_img{shape_index}.{image_ext}"
-                    image_path = os.path.join(image_dir, image_name)
+                # Extract images
+                for shape_index, shape in enumerate(slide.shapes, start=1):
+                    try:
+                        if getattr(shape, "shape_type", None) == 13:  # PICTURE
+                            image = shape.image
+                            image_bytes = image.blob
+                            image_ext = image.ext
+                            image_name = (
+                                f"slide{slide_number}_img{shape_index}.{image_ext}"
+                            )
+                            image_path = os.path.join(image_dir, image_name)
 
-                    with open(image_path, "wb") as f:
-                        f.write(image_bytes)
+                            try:
+                                with open(image_path, "wb") as f:
+                                    f.write(image_bytes)
+                            except Exception:
+                                traceback.print_exc()
+                                continue
 
-                    placeholder = f"{{PENDING_{image_name}}}"
-                    page_text += f"\n\n[Image: {image_name}]\n{placeholder}"
-                    image_names.append(image_name)
+                            placeholder = f"{{PENDING_{image_name}}}"
+                            page_text += f"\n\n{placeholder}"
+                            image_names.append(image_name)
 
-                    ocr_tasks[placeholder] = asyncio.create_task(image_parser(image_path))
+                            ocr_tasks[placeholder] = asyncio.create_task(
+                                image_parser(image_path)
+                            )
+                    except Exception:
+                        traceback.print_exc()
 
-            combined_texts.append(page_text)
-            pages.append(Page(number=slide_number, text=page_text, images=image_names))
+                combined_texts.append(page_text)
+                pages.append(
+                    Page(number=slide_number, text=page_text, images=image_names)
+                )
 
-        # Wait for OCR tasks
-        for placeholder, task in ocr_tasks.items():
-            try:
-                image_text = await task
-            except Exception as e:
-                print(f"Error parsing PPT image: {e}")
-                image_text = "[Image OCR failed]"
+            # Wait for OCR tasks
+            for placeholder, task in ocr_tasks.items():
+                try:
+                    image_text = await task
+                except Exception as e:
+                    print(f"Error parsing PPT image: {e}")
+                    traceback.print_exc()
+                    image_text = "[Image OCR failed]"
 
-            for page in pages:
-                if placeholder in page.text:
-                    page.text = page.text.replace(placeholder, image_text, 1)
-            combined_texts = [txt.replace(placeholder, image_text, 1) for txt in combined_texts]
+                for page in pages:
+                    if placeholder in page.text:
+                        page.text = page.text.replace(placeholder, image_text, 1)
+                combined_texts = [
+                    txt.replace(placeholder, image_text, 1) for txt in combined_texts
+                ]
+        except Exception:
+            traceback.print_exc()
 
         doc_id = str(uuid.uuid4())
         end_time = time.time()
-        print(f"Time taken to process {title} successfully: {end_time - start_time} seconds")
+        print(
+            f"Time taken to process {title} successfully: {end_time - start_time} seconds"
+        )
         return Document(
             id=doc_id,
             type=ext[1:],
-            file_name=file_name or os.path.basename(file_path),
+            file_name=safe_file_name,
             content=pages,
             title=title,
             full_text="\n".join(combined_texts),
         )
 
     # --- Handle PDFs ---
-    print(f"DEBUG: Trying to open PDF at {file_path}, exists={os.path.exists(file_path)}, size={os.path.getsize(file_path) if os.path.exists(file_path) else 'N/A'}")
-    # file_path = os.path.abspath(path)
-    doc = fitz.open(file_path)
-    pages = []
-    combined_texts = []
-    ocr_tasks = {}
-
-    for page_number in range(len(doc)):
-        page = doc.load_page(page_number)
-        page_text = page.get_text("text")
-
-        image_names = []
-        image_dir = f"data/threads/{thread_id}/images/{name}"
-        os.makedirs(image_dir, exist_ok=True)
-
-        # Extract embedded raster images
-        image_list = page.get_images(full=True)
-        for img_index, img in enumerate(image_list):
-            xref = img[0]
-            base_image = doc.extract_image(xref)
-            image_bytes = base_image["image"]
-            image_ext = base_image["ext"]
-            image = Image.open(io.BytesIO(image_bytes))
-
-            image_name = f"page{page_number + 1}_img{img_index + 1}.{image_ext}"
-            image_path = os.path.join(image_dir, image_name)
-            image.save(image_path)
-
-            placeholder = f"{{PENDING_{image_name}}}"
-            page_text += f"\n\n[Image: {image_name}]\n{placeholder}"
-            image_names.append(image_name)
-
-            ocr_tasks[placeholder] = asyncio.create_task(image_parser(image_path))
-
-        # Extract vector diagrams (save as SVG)
-        svg_name = f"page{page_number + 1}.svg"
-        svg_path = os.path.join(image_dir, svg_name)
+    if ext in [
+        ".pdf",
+        ".xlsx",
+        ".epub",
+        ".odt",
+        ".txt",
+        ".rtf",
+        ".docx",
+        ".html",
+        ".xml",
+    ]:
         try:
-            svg = page.get_svg_image()
-            with open(svg_path, "w", encoding="utf-8") as f:
-                f.write(svg)
-
-            placeholder = f"{{VECTOR_{svg_name}}}"
-            page_text += f"\n\n[VectorDiagram: {svg_name}]\n{placeholder}"
-
-            png_name = f"page{page_number + 1}_vector.png"
-            png_path = os.path.join(image_dir, png_name)
-            pix = page.get_pixmap(dpi=300)
-            pix.save(png_path)
-            ocr_tasks[placeholder] = asyncio.create_task(image_parser(png_path))
-
-            image_names.append(svg_name)
-            image_names.append(png_name)
-
+            doc = fitz.open(file_path)
         except Exception as e:
-            print(f"No vector export available on page {page_number+1}: {e}")
+            print(f"Error opening PDF {safe_file_name}: {e}")
+            traceback.print_exc()
+            return None
+        pages = []
+        combined_texts = []
+        ocr_tasks = {}
 
-        combined_texts.append(page_text)
-        pages.append(Page(number=page_number + 1, text=page_text, images=image_names))
+        for page_number in range(len(doc)):
+            try:
+                page = doc.load_page(page_number)
+                page_text = page.get_text("text")
+            except Exception:
+                traceback.print_exc()
+                page_text = ""
 
-    # Wait for OCR tasks
-    for placeholder, task in ocr_tasks.items():
-        try:
-            image_text = await task
-        except Exception as e:
-            print(f"Error parsing image: {e}")
-            image_text = "[Image OCR failed]"
+            image_names = []
+            image_dir = f"data/threads/{thread_id}/images/{name}"
+            try:
+                os.makedirs(image_dir, exist_ok=True)
+            except Exception:
+                traceback.print_exc()
 
-        for page in pages:
-            if placeholder in page.text:
-                page.text = page.text.replace(placeholder, image_text, 1)
-        combined_texts = [txt.replace(placeholder, image_text, 1) for txt in combined_texts]
+            # Extract embedded raster images
+            try:
+                image_list = page.get_images(full=True)
+            except Exception:
+                traceback.print_exc()
+                image_list = []
+            for img_index, img in enumerate(image_list):
+                try:
+                    xref = img[0]
+                    base_image = doc.extract_image(xref)
+                    image_bytes = base_image.get("image")
+                    image_ext = base_image.get("ext", "png")
+                    if not image_bytes:
+                        continue
+                    image = Image.open(io.BytesIO(image_bytes))
 
-    doc_id = str(uuid.uuid4())
-    end_time = time.time()
-    print(f"Time taken to process {title} successfully: {end_time - start_time} seconds")
-    return Document(
-        id=doc_id,
-        type=ext[1:],
-        file_name=file_name or os.path.basename(file_path),
-        content=pages,
-        title=title,
-        full_text="\n".join(combined_texts),
+                    image_name = f"page{page_number + 1}_img{img_index + 1}.{image_ext}"
+                    image_path = os.path.join(image_dir, image_name)
+                    try:
+                        image.save(image_path)
+                    except Exception:
+                        traceback.print_exc()
+                        continue
+
+                    placeholder = f"{{PENDING_{image_name}}}"
+                    page_text += f"\n\n{placeholder}"
+                    image_names.append(image_name)
+
+                    ocr_tasks[placeholder] = asyncio.create_task(
+                        image_parser(image_path)
+                    )
+                except Exception:
+                    traceback.print_exc()
+
+            # Extract vector diagrams (save as SVG)
+            svg_name = f"page{page_number + 1}.svg"
+            svg_path = os.path.join(image_dir, svg_name)
+            try:
+                svg = page.get_svg_image()
+                try:
+                    with open(svg_path, "w", encoding="utf-8") as f:
+                        f.write(svg)
+                except Exception:
+                    traceback.print_exc()
+
+                placeholder = f"{{VECTOR_{svg_name}}}"
+                page_text += f"\n\n{placeholder}"
+
+                png_name = f"page{page_number + 1}_vector.png"
+                png_path = os.path.join(image_dir, png_name)
+                try:
+                    pix = page.get_pixmap(dpi=300)
+                    pix.save(png_path)
+                    ocr_tasks[placeholder] = asyncio.create_task(image_parser(png_path))
+                    image_names.append(svg_name)
+                    image_names.append(png_name)
+                except Exception:
+                    traceback.print_exc()
+            except Exception as e:
+                print(f"No vector export available on page {page_number+1}: {e}")
+
+            combined_texts.append(page_text)
+            pages.append(
+                Page(number=page_number + 1, text=page_text, images=image_names)
+            )
+
+        # Wait for OCR tasks
+        for placeholder, task in ocr_tasks.items():
+            try:
+                image_text = await task
+            except Exception as e:
+                print(f"Error parsing image: {e}")
+                traceback.print_exc()
+                image_text = "[Image OCR failed]"
+
+            for page in pages:
+                if placeholder in page.text:
+                    page.text = page.text.replace(placeholder, image_text, 1)
+            combined_texts = [
+                txt.replace(placeholder, image_text, 1) for txt in combined_texts
+            ]
+
+        doc_id = str(uuid.uuid4())
+        end_time = time.time()
+        print(
+            f"Time taken to process {title} successfully: {end_time - start_time} seconds"
+        )
+        return Document(
+            id=doc_id,
+            type=ext[1:],
+            file_name=safe_file_name,
+            content=pages,
+            title=title,
+            full_text="\n".join(combined_texts),
+        )
+
+    # If we reach here, the extension is supported but not yet implemented
+    print(
+        f"Parsing for file type {ext} not implemented for {safe_file_name}. Skipping."
     )
+    return None
