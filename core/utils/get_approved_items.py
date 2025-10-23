@@ -23,11 +23,11 @@ async def get_approved_items(domains, keywords, thread_id: str):
 
     await sio.emit(
         f"{thread_id}/topic_approval",
-        {"domains": domains, "keywords": keywords},
-        # {"domains": domains, "keywords": keywords, "message": message},
+        # {"domains": domains, "keywords": keywords},
+        {"domains": domains, "keywords": keywords, "message": message},
     )
     try:
-        response = await asyncio.wait_for(future, timeout=1800)  # 30 minutes timeout
+        response = await asyncio.wait_for(future, timeout=300)  # 5 minutes timeout
 
         with open("debug/approved_topics.txt", "w", encoding="utf-8") as f:
             f.write(str(response))

@@ -31,6 +31,7 @@ DEFAULT_PPT_GAP_INCH = 0.3
 # Utility helpers
 # ---------------------------
 
+
 def ensure_list(value: Any) -> List:
     """Return a list for list-like inputs, or [] for None, or [value] for single non-list values."""
     if value is None:

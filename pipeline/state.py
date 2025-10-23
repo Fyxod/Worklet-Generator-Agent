@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
-from core.llm.outputs import KeywordsExtractionResult, WorkletGenerationResult
+from core.llm.outputs import WorkletGenerationResult
 from core.constants import *
 from core.models.document import Documents
 from core.models.worklet import Worklet, SimpleDomainsKeywords

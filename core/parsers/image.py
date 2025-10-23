@@ -1,7 +1,4 @@
 import asyncio
-import time
-import aiofiles
-import httpx
 from PIL import Image
 import pytesseract
 

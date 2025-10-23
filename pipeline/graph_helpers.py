@@ -3,7 +3,8 @@ from core.llm.prompts.main_prompt import unified_problem_generation_prompt
 from core.llm.prompts.reference_ranking_prompt import reference_ranking_prompt
 import asyncio
 from core.utils.compress_prompt import compress_main_prompt, compress_references
-from core.constants  import MAX_TOKENS
+from core.constants import MAX_TOKENS
+
 from pipeline.state import AgentState
 from pipeline.tools.search import search_tavily as search_tool
 from core.models.worklet import Worklet

@@ -1,3 +1,4 @@
+# Not being used currently, but kept for reference
 def problem_generation_prompt(
     worklet_data: str,
     links_data: str,
@@ -25,7 +26,7 @@ def problem_generation_prompt(
                 "engineering colleges across India.\n\n"
                 "Your task is to **analyze the provided materials** — including internal documents, extracted data, "
                 "prior keyword/domain information, and web search results — and generate **precisely defined, feasible project ideas** "
-                "aligned with Samsung’s research and innovation goals."
+                "aligned with Samsung's research and innovation goals."
             ),
         }
     )

@@ -5,7 +5,7 @@ class Reference(BaseModel):
     title: str = Field(..., description="Title of the academic reference or paper")
     link: str = Field(..., description="URL link to the academic reference or paper")
     description: str = Field(..., description="Brief description or abstract of the academic reference or paper")
-    tag: str = Field(..., description="Tag indicating the source of the reference, e.g., 'web', 'scholar'")
+    tag: str = Field(..., description="Tag indicating the source of the reference, e.g., 'google', 'scholar'")
 
 class Worklet(BaseModel):
     worklet_id: str = Field(..., description="Unique identifier for the worklet")

@@ -1,6 +1,7 @@
 import json
 import time
 import os
+import aiofiles
 import asyncio
 
 from pipeline.graph_helpers import (
@@ -13,6 +14,7 @@ from pipeline.state import AgentState
 from pipeline.tools.search import search_tavily as search_tool
 from core.models.worklet import SimpleDomainsKeywords
 
+# from core.constants import *
 from core.utils.generate_files import generate_file
 from core.llm.client import invoke_llm
 from core.models.worklet import Worklet
@@ -25,7 +27,7 @@ from core.llm.outputs import (
 )
 from core.utils.compress_prompt import compress_references
 from core.references.generate_references import generate_references
-from core.constants import WEB_SEARCH, REFERENCES, SWITCHES
+from core.constants import SWITCHES, WEB_SEARCH, REFERENCES
 from core.constants import (
     KEYWORD_DOMAIN_EXTRACTION_LLM,
     WORKLET_GENERATOR_LLM,
@@ -36,7 +38,6 @@ from core.services.upload_files import upload_files
 from core.parsers.process_files import process_files
 from core.models.document import Documents
 from pipeline.tools.extract import extract_links
-from core.llm.prompts.reference_ranking_prompt import reference_ranking_prompt
 from core.llm.prompts.reference_keyword_prompt import (
     reference_search_keyword_prompt as keyword_prompt,
 )
@@ -45,20 +46,19 @@ from app.socket_handler import sio
 from core.utils.get_approved_items import get_approved_items
 from core.utils.get_approved_queries import get_approved_queries
 from core.utils.fix_dashes import fix_dashes
+from app.broadcast import update_message, stop_broadcasting
 
 os.makedirs("debug", exist_ok=True)
 
 
 async def process_input(state: AgentState) -> AgentState:
-    print(state.links)
-    print(type(state.links))
-    print("before this" * 50)
     s = time.time()
 
     async def process_files_task():
         if state.files and len(state.files) > 0:
-            await sio.emit(
-                "status_update", {"message": "Uploading and processing files..."}
+            await update_message(
+                {"message": "Uploading and processing files..."},
+                topic=f"{state.thread_id}/status_update",
             )
             files_data = await upload_files(state.files, state.thread_id)
             if not files_data:
@@ -74,8 +74,9 @@ async def process_input(state: AgentState) -> AgentState:
 
     async def process_links_task():
         if state.links and len(state.links) > 0:
-            await sio.emit(
-                "status_update", {"message": "Extracting data from links..."}
+            await update_message(
+                {"message": "Extracting data from links..."},
+                topic=f"{state.thread_id}/status_update",
             )
             links_data = await extract_links(state.links)
             if not links_data:
@@ -108,9 +109,9 @@ async def extract_keywords_domains(state: AgentState) -> AgentState:
         with open("debug/extraction_prompt.txt", "w", encoding="utf-8") as f:
             f.write(str(prompt))
 
-        await sio.emit(
-            f"{state.thread_id}/status_update",
+        await update_message(
             {"message": "Extracting keywords and domains..."},
+            topic=f"{state.thread_id}/status_update",
         )
 
         result: KeywordsExtractionResult = await invoke_llm(
@@ -145,8 +146,8 @@ async def generate_worklets(state: AgentState) -> AgentState:
     with open("debug/main_prompt.txt", "w", encoding="utf-8") as f:
         f.write(str(prompt))
 
-    await sio.emit(
-        f"{state.thread_id}/status_update", {"message": "Generating worklets..."}
+    await update_message(
+        {"message": "Generating worklets..."}, topic=f"{state.thread_id}/status_update"
     )
 
     result: WorkletGenerationResult = await invoke_llm(
@@ -178,8 +179,8 @@ async def web_search(state: AgentState) -> AgentState:
         return state
 
     queries = await get_approved_queries(queries, state.thread_id)
-    await sio.emit(
-        f"{state.thread_id}/status_update", {"message": "Web search invoked..."}
+    await update_message(
+        {"message": "Web search invoked..."}, topic=f"{state.thread_id}/status_update"
     )
 
     print(f"Performing web search for queries: {queries}")
@@ -188,8 +189,8 @@ async def web_search(state: AgentState) -> AgentState:
         f.write(json.dumps(web_search_results, indent=2))
     state.web_search_results = web_search_results
     print(f"Web search took {time.time() - s:.2f} seconds")
-    await sio.emit(
-        f"{state.thread_id}/status_update", {"message": "Web search completed."}
+    await update_message(
+        {"message": "Web search completed."}, topic=f"{state.thread_id}/status_update"
     )
     return state
 
@@ -199,31 +200,34 @@ async def references(state: AgentState) -> AgentState:
         return state
 
     s = time.time()
-    for worklet in state.generation_output.worklets:
-        await sio.emit(
-            f"{state.thread_id}/status_update",
+
+    async def process_single_worklet(worklet: Worklet, llm_config):
+        """Process a single worklet with reference keyword generation and fetching"""
+        await update_message(
             {"message": f"Generating references for worklet: {worklet.title}..."},
+            topic=f"{state.thread_id}/status_update",
         )
         default_keywords = ReferenceKeywordResult(
             google_scholar_keyword=worklet.title, github_keyword=worklet.title
         )
+
         if SWITCHES["GENERATE_KEYWORD"]:
             prompt = keyword_prompt(worklet.title or worklet.problem_statement)
             try:
                 result: ReferenceKeywordResult = await invoke_llm(
-                    ollama_model=REFERENCE_KEYWORD_LLM.model,
+                    ollama_model=llm_config.model,
                     contents=prompt,
                     response_schema=ReferenceKeywordResult,
-                    port=REFERENCE_KEYWORD_LLM.port,
+                    port=llm_config.port,
                 )
                 keywords = result or default_keywords
 
-                with open(
+                async with aiofiles.open(
                     f"debug/reference_keyword_{worklet.title}.txt",
                     "w",
                     encoding="utf-8",
                 ) as f:
-                    f.write(str(result.model_dump()))
+                    await f.write(str(result.model_dump()))
             except Exception as e:
                 print(
                     f"Error extracting reference keyword for worklet '{worklet.title}': {e}"
@@ -233,15 +237,30 @@ async def references(state: AgentState) -> AgentState:
             keywords = default_keywords
 
         references = await generate_references(keywords)
-        with open(f"debug/references_{worklet.title}.json", "w", encoding="utf-8") as f:
-            f.write(json.dumps([ref.model_dump() for ref in references], indent=2))
-        state.worklets.append(
-            Worklet(
-                **worklet.model_dump(),
-                references=references,
-                worklet_id=str(time.time()),
+        async with aiofiles.open(
+            f"debug/references_{worklet.title}.json", "w", encoding="utf-8"
+        ) as f:
+            await f.write(
+                json.dumps([ref.model_dump() for ref in references], indent=2)
             )
+
+        return Worklet(
+            **worklet.model_dump(),
+            references=references,
+            worklet_id=str(time.time()),
         )
+
+    # Parallelize worklet processing, alternating between the two LLM configs
+    worklets = state.generation_output.worklets
+    tasks = []
+
+    for idx, worklet in enumerate(worklets):
+        # Same llm here as we have only one port/model for cpu-version
+        llm_config = REFERENCE_KEYWORD_LLM if idx % 2 == 0 else REFERENCE_KEYWORD_LLM
+        tasks.append(process_single_worklet(worklet, llm_config))
+
+    # Process all worklets in parallel
+    state.worklets = await asyncio.gather(*tasks)
 
     print(f"Reference generation took {time.time() - s:.2f} seconds")
     return state
@@ -251,41 +270,62 @@ async def rank_references(state: AgentState) -> AgentState:
     if not SWITCHES["RANK_REFERENCES"]:
         return state
 
+    s = time.time()
+
+    async def rank_single_worklet(worklet, llm_config):
+        """Rank references for a single worklet"""
+        try:
+            await update_message(
+                {"message": f"Ranking references for worklet: {worklet.title}..."},
+                topic=f"{state.thread_id}/status_update",
+            )
+            if not worklet.references or len(worklet.references) == 0:
+                return worklet
+
+            prompt = build_reference_ranking_prompt(worklet)
+
+            result: ReferenceSortingResult = await invoke_llm(
+                ollama_model=llm_config.model,
+                response_schema=ReferenceSortingResult,
+                contents=prompt,
+                port=llm_config.port,
+            )
+
+            sorted_indices = result.sorted_indices
+            sorted_references = [
+                worklet.references[i]
+                for i in sorted_indices
+                if i < len(worklet.references)
+            ]
+            worklet.references = sorted_references
+            worklet = fix_dashes(worklet)
+            print(f"Ranked references for worklet '{worklet.title}': {sorted_indices}")
+            return worklet
+
+        except Exception as e:
+            print(f"Error ranking references for worklet '{worklet.title}': {e}")
+            # Return worklet unchanged if ranking fails
+            return worklet
+
     try:
-        for worklet in state.worklets:
-            try:
-                await sio.emit(
-                    f"{state.thread_id}/status_update",
-                    {"message": f"Ranking references for worklet: {worklet.title}..."},
-                )
-                if not worklet.references or len(worklet.references) == 0:
-                    continue
+        # Parallelize ranking, alternating between the two ranking LLM configs
+        tasks = []
+        for idx, worklet in enumerate(state.worklets):
+            # Same llm here as we have only one port/model for cpu-version
+            llm_config = (
+                REFERENCE_RANKING_LLM if idx % 2 == 0 else REFERENCE_RANKING_LLM
+            )
+            tasks.append(rank_single_worklet(worklet, llm_config))
 
-                prompt = build_reference_ranking_prompt(worklet)
+        # Process all rankings in parallel
+        state.worklets = await asyncio.gather(*tasks)
 
-                result: ReferenceSortingResult = await invoke_llm(
-                    ollama_model=REFERENCE_RANKING_LLM.model,
-                    response_schema=ReferenceSortingResult,
-                    contents=prompt,
-                    port=REFERENCE_RANKING_LLM.port,
-                )
-
-                sorted_indices = result.sorted_indices
-                sorted_references = [
-                    worklet.references[i] for i in sorted_indices if i < len(worklet.references)
-                ]
-                worklet.references = sorted_references
-                worklet = fix_dashes(worklet)
-                print(f"Ranked references for worklet '{worklet.title}': {sorted_indices}")
-            except Exception as e:
-                print(f"Error ranking references for worklet '{worklet.title}': {e}")
-                # Leave worklet.references unchanged for this worklet
-                continue
+        print(f"Reference ranking took {time.time() - s:.2f} seconds")
     except Exception as e:
         print(f"Error in rank_references function: {e}")
         print("Continuing without ranking references.")
         # Leave all references unchanged
-    
+
     return state
 
 
@@ -301,15 +341,8 @@ async def generate_files(state: AgentState) -> AgentState:
     )
 
     s = time.time()
-    await sio.emit(
-        f"{state.thread_id}/status_update",
-        {"message": f"Generating files for worklets..."},
-    )
     for idx, worklet in enumerate(state.worklets):
         await generate_file(worklet=worklet, thread_id=state.thread_id)
-        await sio.emit(
-            f"{state.thread_id}/file_generated", {"filename": f"{worklet.title}"}
-        )
 
     print(f"{idx + 1} File generation took {time.time() - s:.2f} seconds")
     db.threads.update_one({"thread_id": state.thread_id}, {"$set": {"generated": True}})

@@ -1,4 +1,6 @@
 fastapi
+langchain
+langchain-core
 langchain-community
 tavily-python
 langchain-ollama
@@ -13,7 +15,6 @@ uvicorn[standard]
 aiofiles
 google-genai
 openai
-aiofiles
 PyMuPDF
 python-pptx
 beautifulsoup4
@@ -27,12 +28,9 @@ selenium
 selenium-stealth
 webdriver_manager
 selectolax
-pandas
 parsel
 tiktoken
 pandas
 xlrd
-langchain_core
-weasyprint
-xlrd
 openpyxl
+tabulate

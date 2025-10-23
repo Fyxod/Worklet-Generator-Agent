@@ -19,12 +19,14 @@ async def get_all_threads():
 @router.delete("/delete/{thread_id}")
 async def delete_thread(thread_id: str):
     if not thread_id:
-        return {"error": "Thread ID is required"}
+        # Bad Request when required path parameter is missing/empty
+        raise HTTPException(status_code=400, detail="Thread ID is required")
 
     result = db.threads.delete_one({"thread_id": thread_id})
     if result.deleted_count == 1:
         return {"message": f"Thread {thread_id} deleted successfully"}
-    return {"error": "Thread not found"}
+    # Not Found when the resource does not exist
+    raise HTTPException(status_code=404, detail="Thread not found")
 
 
 @router.get("/{thread_id}")
@@ -32,7 +34,7 @@ async def get_thread(thread_id: str):
     thread = db.threads.find_one({"thread_id": thread_id}, {"_id": 0})  # exclude _id
     if thread:
         return thread
-    return {"error": "Thread not found"}
+    raise HTTPException(status_code=404, detail="Thread not found")
 
 
 @router.get("/{thread_id}/download/all/{file_type}")
@@ -113,6 +115,8 @@ async def download_all_worklets(thread_id: str, file_type: str):
         media_type="application/zip",
         headers={"Content-Disposition": f"attachment; filename={zf_name}"},
     )
+
+
 @router.get("/{thread_id}/download/{worklet_id}/{file_type}")
 async def download_worklet(thread_id: str, worklet_id: str, file_type: str):
     if file_type not in {"pdf", "ppt"}:
@@ -155,5 +159,3 @@ async def download_worklet(thread_id: str, worklet_id: str, file_type: str):
         media_type=media_type,
         headers={"Content-Disposition": f"attachment; filename={download_name}"},
     )
-
-
