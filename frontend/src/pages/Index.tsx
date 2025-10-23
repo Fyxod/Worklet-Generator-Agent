@@ -12,22 +12,28 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getSocket } from '@/lib/socket';
 import { toast } from 'sonner';
 import { API_URL } from '@/config';
+import { ApiError, requestJson, formatValidationDetails } from '@/lib/http';
 
 const Index = () => {
   const navigate = useNavigate();
   const { threadId } = useParams();
   const location = useLocation();
-  
+
   const [threads, setThreads] = useState<Thread[]>([]);
   const [selectedThread, setSelectedThread] = useState<Thread | null>(null);
   const [threadLoading, setThreadLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [progressMessages, setProgressMessages] = useState<ProgressMessage[]>([]);
   const [worklets, setWorklets] = useState<Worklet[]>([]);
+  // Initialization placeholder state for brand-new thread creation
+  const [isInitializing, setIsInitializing] = useState<boolean>(false);
+  const isInitializingRef = useRef<boolean>(false);
+  const initTimeoutRef = useRef<number | null>(null);
   // Stores to preserve per-thread progress & worklets when user navigates away
   const [progressStore, setProgressStore] = useState<Record<string, ProgressMessage[]>>({});
   const [workletsStore, setWorkletsStore] = useState<Record<string, Worklet[]>>({});
-  const [subscribedThreads, setSubscribedThreads] = useState<Set<string>>(new Set());
+  // Keep track of current socket event bindings for cleanup
+  const socketCleanupRef = useRef<() => void>(() => { });
 
 
   const currentThreadIdRef = useRef<string | null>(null);
@@ -35,6 +41,7 @@ const Index = () => {
   const [domainKeywordModal, setDomainKeywordModal] = useState<{
     open: boolean;
     data: DomainsKeywords | null;
+    message?: string;
   }>({ open: false, data: null });
 
   const [webQueryModal, setWebQueryModal] = useState<{
@@ -74,8 +81,7 @@ const Index = () => {
 
   const fetchThreads = async () => {
     try {
-      const response = await fetch(`${API_URL}/thread/all`);
-      const data = await response.json();
+      const data = await requestJson<{ threads: Thread[] }>(`${API_URL}/thread/all`);
       const fetched: Thread[] = data.threads || [];
       // Sort descending by created_at (most recent first). Guard against invalid dates.
       const sorted = [...fetched].sort((a, b) => {
@@ -86,20 +92,24 @@ const Index = () => {
       setThreads(sorted);
     } catch (error) {
       console.error('Error fetching threads:', error);
-      toast.error('Failed to fetch threads');
+      if (error instanceof ApiError) {
+        toast.error(error.message);
+      } else {
+        toast.error('Failed to fetch threads');
+      }
     }
   };
 
   const fetchThread = async (id: string) => {
     try {
       setThreadLoading(true);
-      const response = await fetch(`${API_URL}/thread/${id}`);
-      const data = await response.json();
+      const data = await requestJson<Thread>(`${API_URL}/thread/${id}`);
       setSelectedThread(data);
 
       if (!data.generated) {
         setupSocketListeners(id);
-
+        // Do NOT start initializing when navigating to an existing thread
+        // Only show initialization for brand-new local thread creation
         setProgressMessages([]);
         setWorklets(workletsStore[id] || []);
       } else {
@@ -115,57 +125,110 @@ const Index = () => {
       }
     } catch (error) {
       console.error('Error fetching thread:', error);
-      toast.error('Failed to fetch thread');
+      if (error instanceof ApiError) {
+        if (error.status === 404) {
+          // Navigate to NotFound and show backend message
+          toast.error(error.message || 'Thread not found');
+          navigate('/not-found', { replace: true, state: { code: error.status, message: error.message, path: error.path || `/thread/${id}` } });
+        } else {
+          toast.error(error.message);
+        }
+      } else {
+        toast.error('Failed to fetch thread');
+      }
     }
     finally {
       setThreadLoading(false);
     }
   };
 
+  const stopInitializing = () => {
+    setIsInitializing(false);
+    isInitializingRef.current = false;
+    if (initTimeoutRef.current) {
+      clearTimeout(initTimeoutRef.current);
+      initTimeoutRef.current = null;
+    }
+  };
+
+  const startInitializing = (id: string) => {
+    stopInitializing();
+    setIsInitializing(true);
+    isInitializingRef.current = true;
+    // Immediately show the placeholder message
+    setProgressMessages([{ message: 'Initializing pipeline', timestamp: Date.now() }]);
+    // Guard timeout to auto-hide after 10s if nothing arrives
+    initTimeoutRef.current = window.setTimeout(() => {
+      // Only clear if still on the same thread and still initializing
+      if (currentThreadIdRef.current === id) {
+        setProgressMessages([]);
+        setIsInitializing(false);
+        isInitializingRef.current = false;
+      }
+      initTimeoutRef.current = null;
+    }, 10000);
+  };
+
   const setupSocketListeners = (id: string) => {
-    // Avoid duplicate subscriptions
-    if (subscribedThreads.has(id)) return;
-    setSubscribedThreads(prev => new Set(prev).add(id));
+    // Always tear down previous listeners before setting new ones
+    socketCleanupRef.current?.();
 
     const socket = getSocket();
 
-    socket.on(`${id}/status_update`, (data: { message: string }) => {
+    const statusHandler = (data: { message: string }) => {
       const timestamp = Date.now();
       console.log(`[${new Date(timestamp).toISOString()}] Progress:`, data.message);
 
+      // Store latest message for this thread; keep history per-thread if needed
       setProgressStore(prev => {
         const existing = prev[id] || [];
         const updated = [...existing, { message: data.message, timestamp }];
         return { ...prev, [id]: updated };
       });
 
-
+      // Only update UI if we're on the same thread; keep only the last message in UI state
       if (currentThreadIdRef.current === id) {
-        setProgressMessages(current => {
-          if (current.length && current[current.length - 1].timestamp === timestamp) return current;
-          return [...current, { message: data.message, timestamp }];
-        });
+        // First real message arrived; stop showing initialization placeholder
+        if (isInitializingRef.current) {
+          stopInitializing();
+        }
+        setProgressMessages([{ message: data.message, timestamp }]);
       }
-    });
+    };
 
-    socket.on(`${id}/topic_approval`, (data: DomainsKeywords) => {
+    const topicApprovalHandler = (data: DomainsKeywords & { message?: string }) => {
       console.log('Received topic approval request:', data);
-      setDomainKeywordModal({ open: true, data });
-    });
+      setDomainKeywordModal({ open: true, data, message: data.message });
+    };
 
-    socket.on(`${id}/web_approval`, (data: { queries: string[] }) => {
+    const webApprovalHandler = (data: { queries: string[] }) => {
       console.log('Received web approval request:', data);
       setWebQueryModal({ open: true, queries: data.queries });
-    });
+    };
 
-    socket.on(`${id}/file_generated`, (data: { worklet: Worklet }) => {
+    const fileGeneratedHandler = (data: { worklet: Worklet }) => {
       setWorkletsStore(prev => {
         const existing = prev[id] || [];
         const updated = [...existing, data.worklet];
         if (threadId === id) setWorklets(updated);
         return { ...prev, [id]: updated };
       });
-    });
+    };
+
+    socket.on(`${id}/status_update`, statusHandler);
+    socket.on(`${id}/topic_approval`, topicApprovalHandler);
+    socket.on(`${id}/web_approval`, webApprovalHandler);
+    socket.on(`${id}/file_generated`, fileGeneratedHandler);
+
+    // Register cleanup for these specific listeners
+    socketCleanupRef.current = () => {
+      try {
+        socket.off(`${id}/status_update`, statusHandler);
+        socket.off(`${id}/topic_approval`, topicApprovalHandler);
+        socket.off(`${id}/web_approval`, webApprovalHandler);
+        socket.off(`${id}/file_generated`, fileGeneratedHandler);
+      } catch { }
+    };
   };
 
   const handleNewThread = () => {
@@ -173,6 +236,9 @@ const Index = () => {
     if (location.pathname !== '/new') {
       navigate('/new', { replace: false });
     }
+    // Stop listening to any previous thread updates
+    socketCleanupRef.current?.();
+    stopInitializing();
     setShowForm(true);
     setSelectedThread(null);
     setProgressMessages([]);
@@ -183,6 +249,9 @@ const Index = () => {
     if (location.pathname !== '/new') {
       navigate('/new');
     }
+    // Stop listening to any previous thread updates
+    socketCleanupRef.current?.();
+    stopInitializing();
     setShowForm(true);
   };
   function safeUUID() {
@@ -195,7 +264,7 @@ const Index = () => {
   const handleGenerate = async (formData: any) => {
     // Preserve form data in case of failure
     const previousFormData = { ...formData };
-    const newThreadId = safeUUID()
+    const newThreadId = safeUUID();
 
     // Optimistically create a local thread representation
     const optimisticThread = {
@@ -225,10 +294,12 @@ const Index = () => {
     setWorkletsStore(prev => ({ ...prev, [newThreadId]: [] }));
 
     // Navigate to the new thread URL
-    navigate(`/${newThreadId}`);
+    navigate(`/thread/${newThreadId}`);
 
     // Start listening for updates BEFORE sending request
     setupSocketListeners(newThreadId);
+    // Show initializing placeholder immediately for brand-new thread
+    startInitializing(newThreadId);
 
     const body = new FormData();
     body.append('thread_id', newThreadId);
@@ -239,16 +310,10 @@ const Index = () => {
     formData.files.forEach((file: File) => body.append('files', file));
 
     try {
-      const response = await fetch(`${API_URL}/generate`, {
+      const data = await requestJson<{ worklets: Worklet[] }>(`${API_URL}/generate`, {
         method: 'POST',
         body,
       });
-
-      if (!response.ok) {
-        throw new Error(`Backend responded with status ${response.status}`);
-      }
-
-      const data = await response.json();
       setWorklets(data.worklets || []);
       // Mark thread as generated & not local anymore so the progress bar disappears
       setSelectedThread(prev => prev ? {
@@ -260,20 +325,31 @@ const Index = () => {
       if (data.worklets) {
         setWorkletsStore(prev => ({ ...prev, [newThreadId]: data.worklets }));
       }
-      setProgressMessages(prev => [
-        ...prev,
-        { message: 'Worklets generated successfully', timestamp: Date.now() },
-      ]);
+      // Hide progress box by marking thread as generated above; do not append more progress UI entries
+      setProgressMessages([]);
+      stopInitializing();
       fetchThreads();
       toast.success('Worklets generated successfully');
     } catch (error) {
       console.error('Error generating worklets:', error);
-      toast.error('Failed to generate worklets');
+      if (error instanceof ApiError) {
+        if (error.status === 409) {
+          toast.error(error.message || 'Thread ID already exists');
+        } else if (error.status === 422) {
+          const hint = formatValidationDetails(error.details);
+          toast.error([error.message, hint].filter(Boolean).join('\n'));
+        } else {
+          toast.error(error.message);
+        }
+      } else {
+        toast.error('Failed to generate worklets');
+      }
 
       navigate('/new', { state: { previousFormData } });
       setShowForm(true);
       setSelectedThread(null);
       setProgressMessages([]);
+      stopInitializing();
       setWorklets([]);
     }
   };
@@ -290,13 +366,17 @@ const Index = () => {
     setSelectedThread(null);
     setProgressMessages([]);
     setWorklets([]);
+    stopInitializing();
     setThreadLoading(true);
-    navigate(`/${id}`);
+    navigate(`/thread/${id}`);
   };
 
   const handleHeaderClick = () => {
     // Return to welcome screen
     navigate('/');
+    // Stop listening to any previous thread updates
+    socketCleanupRef.current?.();
+    stopInitializing();
     setShowForm(false);
     setSelectedThread(null);
     setProgressMessages([]);
@@ -305,8 +385,7 @@ const Index = () => {
 
   const handleDeleteThread = async (id: string) => {
     try {
-      const res = await fetch(`${API_URL}/thread/delete/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error(`Failed to delete thread (status ${res.status})`);
+      await requestJson(`${API_URL}/thread/delete/${id}`, { method: 'DELETE' });
       setThreads(prev => prev.filter(t => t.thread_id !== id));
       // Clean stores
       setProgressStore(prev => { const { [id]: _, ...rest } = prev; return rest; });
@@ -316,12 +395,17 @@ const Index = () => {
         navigate('/');
         setSelectedThread(null);
         setProgressMessages([]);
+        stopInitializing();
         setWorklets([]);
       }
       toast.success('Thread deleted');
     } catch (e) {
       console.error(e);
-      toast.error(e instanceof Error ? e.message : 'Failed to delete thread');
+      if (e instanceof ApiError) {
+        toast.error(e.message);
+      } else {
+        toast.error(e instanceof Error ? e.message : 'Failed to delete thread');
+      }
     }
   };
 
@@ -359,7 +443,7 @@ const Index = () => {
       },
     };
     socket.emit(`${threadId}/topic_response`, sanitized);
-    setDomainKeywordModal({ open: false, data: null });
+    setDomainKeywordModal({ open: false, data: null, message: undefined });
   };
 
   const handleWebQuerySubmit = (queries: string[]) => {
@@ -396,12 +480,30 @@ const Index = () => {
     const found = threads.find(t => t.thread_id === threadId);
     if (!found) return;
 
-    if (found.generated && progressStore[threadId] && progressStore[threadId].length > 0) {
-      if (progressMessages.length < progressStore[threadId].length) {
-        setProgressMessages(progressStore[threadId]);
-      }
+    // If thread already generated, ensure progress UI is hidden.
+    if (found.generated) {
+      setProgressMessages([]);
+      return;
+    }
+    // If not generated and there are stored messages, show only the latest.
+    const list = progressStore[threadId] || [];
+    if (list.length > 0) {
+      const last = list[list.length - 1];
+      setProgressMessages([last]);
     }
   }, [threadId, progressStore, threads]);
+
+  // On unmount, ensure we cleanup any socket listeners
+  useEffect(() => {
+    return () => {
+      socketCleanupRef.current?.();
+      // Clear any pending init timeout on unmount
+      if (initTimeoutRef.current) {
+        clearTimeout(initTimeoutRef.current);
+        initTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   return (
     <div className="flex h-screen w-full bg-background">
@@ -463,6 +565,8 @@ const Index = () => {
         <DomainKeywordModal
           open={domainKeywordModal.open}
           data={domainKeywordModal.data}
+          threadName={selectedThread?.thread_name}
+          message={domainKeywordModal.message}
           onSubmit={handleDomainKeywordSubmit}
         />
       )}

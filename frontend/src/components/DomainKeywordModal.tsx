@@ -10,9 +10,11 @@ interface DomainKeywordModalProps {
   open: boolean;
   data: DomainsKeywords;
   onSubmit: (data: DomainsKeywords) => void;
+  threadName?: string;
+  message?: string;
 }
 
-export const DomainKeywordModal = ({ open, data, onSubmit }: DomainKeywordModalProps) => {
+export const DomainKeywordModal = ({ open, data, onSubmit, threadName, message }: DomainKeywordModalProps) => {
   // Ensure we always have the expected shape (defensive in case of future optional changes)
   const [domains, setDomains] = useState<DomainsKeywords['domains']>({
     worklet: data.domains?.worklet ?? [],
@@ -125,15 +127,18 @@ export const DomainKeywordModal = ({ open, data, onSubmit }: DomainKeywordModalP
 
   return (
     <Dialog open={open}>
-      <DialogContent className="max-w-4xl max-h-[80vh] bg-card border-border">
+      <DialogContent hideClose className="max-w-4xl max-h-[80vh] bg-card border-border flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            Approve Domains & Keywords
+            {`Approve Domains & Keywords${threadName ? ` for ${threadName}` : ''}`}
           </DialogTitle>
+          {message && (
+            <p className="text-sm text-muted-foreground mt-1">{message}</p>
+          )}
         </DialogHeader>
         
-        <ScrollArea className="h-[60vh] pr-4">
-          <div className="grid grid-cols-2 gap-8">
+        <ScrollArea className="flex-1 min-h-0 pr-4">
+          <div className="grid grid-cols-2 gap-8 p-2">
             {/* Domains Column */}
             <div className="space-y-6">
               <div className="flex items-center justify-between">
@@ -152,7 +157,11 @@ export const DomainKeywordModal = ({ open, data, onSubmit }: DomainKeywordModalP
               {renderSection('Worklets', domains.worklet, 'domains', 'worklet')}
               {renderSection('Links', domains.link, 'domains', 'link')}
               {renderSection('Custom Prompt', domains.custom_prompt, 'domains', 'custom_prompt')}
-              {showCustomDomains && domains.custom && renderSection('Custom Domains', domains.custom, 'domains', 'custom')}
+              {showCustomDomains && domains.custom && (
+                <div className="pb-2">
+                  {renderSection('Custom Domains', domains.custom, 'domains', 'custom')}
+                </div>
+              )}
             </div>
 
             {/* Keywords Column */}
@@ -173,12 +182,16 @@ export const DomainKeywordModal = ({ open, data, onSubmit }: DomainKeywordModalP
               {renderSection('Worklets', keywords.worklet, 'keywords', 'worklet')}
               {renderSection('Links', keywords.link, 'keywords', 'link')}
               {renderSection('Custom Prompt', keywords.custom_prompt, 'keywords', 'custom_prompt')}
-              {showCustomKeywords && keywords.custom && renderSection('Custom Keywords', keywords.custom, 'keywords', 'custom')}
+              {showCustomKeywords && keywords.custom && (
+                <div className="pb-2">
+                  {renderSection('Custom Keywords', keywords.custom, 'keywords', 'custom')}
+                </div>
+              )}
             </div>
           </div>
         </ScrollArea>
 
-        <div className="flex justify-end mt-4">
+        <div className="flex justify-end mt-4 pt-2 border-t border-border">
           <Button
             onClick={handleSubmit}
             className="gradient-primary hover:opacity-90 transition-smooth"
