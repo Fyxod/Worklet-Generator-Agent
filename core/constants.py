@@ -9,10 +9,11 @@ SWITCHES = {
     "FALLBACK_TO_OPENAI": False,  # Fallback to OpenAI if BOTH Ollama and Gemini fails
 
     "REMOTE_GPU": True,  # Use remote GPU LLMs
+    # please refer to core/Setup_Local_ollama.md for setting up local LLM server
 }
 
-PORT1 = 11434
-PORT2 = 11435
+PORT1 = 11434   # port where ollama is running
+PORT2 = 11435   # port where second ollama instance is running 
 
 GPU_MODEL = "gpt-oss:20b-50k-8k"
 MAX_TOKENS = 50000
