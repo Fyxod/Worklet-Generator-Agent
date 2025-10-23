@@ -18,7 +18,7 @@ const Index = () => {
   const navigate = useNavigate();
   const { threadId } = useParams();
   const location = useLocation();
-  
+
   const [threads, setThreads] = useState<Thread[]>([]);
   const [selectedThread, setSelectedThread] = useState<Thread | null>(null);
   const [threadLoading, setThreadLoading] = useState(false);
@@ -33,17 +33,17 @@ const Index = () => {
   const [progressStore, setProgressStore] = useState<Record<string, ProgressMessage[]>>({});
   const [workletsStore, setWorkletsStore] = useState<Record<string, Worklet[]>>({});
   // Keep track of current socket event bindings for cleanup
-  const socketCleanupRef = useRef<() => void>(() => {});
+  const socketCleanupRef = useRef<() => void>(() => { });
 
 
   const currentThreadIdRef = useRef<string | null>(null);
-  
+
   const [domainKeywordModal, setDomainKeywordModal] = useState<{
     open: boolean;
     data: DomainsKeywords | null;
     message?: string;
   }>({ open: false, data: null });
-  
+
   const [webQueryModal, setWebQueryModal] = useState<{
     open: boolean;
     queries: string[];
@@ -227,7 +227,7 @@ const Index = () => {
         socket.off(`${id}/topic_approval`, topicApprovalHandler);
         socket.off(`${id}/web_approval`, webApprovalHandler);
         socket.off(`${id}/file_generated`, fileGeneratedHandler);
-      } catch {}
+      } catch { }
     };
   };
 
@@ -241,7 +241,7 @@ const Index = () => {
     stopInitializing();
     setShowForm(true);
     setSelectedThread(null);
-  setProgressMessages([]);
+    setProgressMessages([]);
     setWorklets([]);
   };
 
@@ -254,11 +254,17 @@ const Index = () => {
     stopInitializing();
     setShowForm(true);
   };
+  function safeUUID() {
+    if (typeof window !== "undefined" && window.crypto?.randomUUID) {
+      return window.crypto.randomUUID();
+    }
+    return Math.random().toString(36).substring(2) + Date.now().toString(36);
+  }
 
   const handleGenerate = async (formData: any) => {
     // Preserve form data in case of failure
     const previousFormData = { ...formData };
-    const newThreadId = crypto.randomUUID();
+    const newThreadId = safeUUID();
 
     // Optimistically create a local thread representation
     const optimisticThread = {
@@ -271,7 +277,7 @@ const Index = () => {
       count: formData.count,
       generated: false,
       created_at: new Date().toISOString(),
-  worklets: [] as Worklet[],
+      worklets: [] as Worklet[],
       local: true,
     };
 
@@ -282,18 +288,18 @@ const Index = () => {
       return [optimisticThread as Thread, ...filtered];
     });
     setShowForm(false);
-  setProgressMessages([]);
+    setProgressMessages([]);
     setWorklets([]);
-  setProgressStore(prev => ({ ...prev, [newThreadId]: [] }));
+    setProgressStore(prev => ({ ...prev, [newThreadId]: [] }));
     setWorkletsStore(prev => ({ ...prev, [newThreadId]: [] }));
 
     // Navigate to the new thread URL
-  navigate(`/thread/${newThreadId}`);
+    navigate(`/thread/${newThreadId}`);
 
-  // Start listening for updates BEFORE sending request
-  setupSocketListeners(newThreadId);
-  // Show initializing placeholder immediately for brand-new thread
-  startInitializing(newThreadId);
+    // Start listening for updates BEFORE sending request
+    setupSocketListeners(newThreadId);
+    // Show initializing placeholder immediately for brand-new thread
+    startInitializing(newThreadId);
 
     const body = new FormData();
     body.append('thread_id', newThreadId);
@@ -308,9 +314,9 @@ const Index = () => {
         method: 'POST',
         body,
       });
-  setWorklets(data.worklets || []);
+      setWorklets(data.worklets || []);
       // Mark thread as generated & not local anymore so the progress bar disappears
-      setSelectedThread(prev => prev ? { 
+      setSelectedThread(prev => prev ? {
         ...prev,
         local: false,
         generated: true,
@@ -356,13 +362,13 @@ const Index = () => {
       setProgressStore(prev => ({ ...prev, [selectedThread.thread_id]: progressMessages }));
       setWorkletsStore(prev => ({ ...prev, [selectedThread.thread_id]: worklets }));
     }
-    
+
     setSelectedThread(null);
-  setProgressMessages([]);
+    setProgressMessages([]);
     setWorklets([]);
     stopInitializing();
     setThreadLoading(true);
-  navigate(`/thread/${id}`);
+    navigate(`/thread/${id}`);
   };
 
   const handleHeaderClick = () => {
@@ -373,7 +379,7 @@ const Index = () => {
     stopInitializing();
     setShowForm(false);
     setSelectedThread(null);
-  setProgressMessages([]);
+    setProgressMessages([]);
     setWorklets([]);
   };
 
@@ -405,7 +411,7 @@ const Index = () => {
 
   const handleDomainKeywordSubmit = (data: DomainsKeywords) => {
     if (!threadId) return;
-    
+
     const socket = getSocket();
     // Sanitize payload: remove empty/whitespace-only strings & trim duplicates (case-insensitive) preserving first occurrence
     const sanitize = (arr: string[]) => {
@@ -437,12 +443,12 @@ const Index = () => {
       },
     };
     socket.emit(`${threadId}/topic_response`, sanitized);
-  setDomainKeywordModal({ open: false, data: null, message: undefined });
+    setDomainKeywordModal({ open: false, data: null, message: undefined });
   };
 
   const handleWebQuerySubmit = (queries: string[]) => {
     if (!threadId) return;
-    
+
     const socket = getSocket();
     // Normalize queries more aggressively to avoid duplicates that differ only by
     // case, extra internal whitespace, or trailing punctuation like '?', '!' or '.'.
@@ -468,12 +474,12 @@ const Index = () => {
     socket.emit(`${threadId}/web_response`, { queries: cleaned });
     setWebQueryModal({ open: false, queries: [] });
   };
-  
+
   useEffect(() => {
     if (!threadId) return;
     const found = threads.find(t => t.thread_id === threadId);
     if (!found) return;
-    
+
     // If thread already generated, ensure progress UI is hidden.
     if (found.generated) {
       setProgressMessages([]);
@@ -508,7 +514,7 @@ const Index = () => {
         selectedThreadId={threadId || null}
         onDeleteThread={handleDeleteThread}
       />
-      
+
       <main className="flex-1 overflow-auto">
         <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
           <div className="p-6">
@@ -529,12 +535,12 @@ const Index = () => {
           {!showForm && !selectedThread && location.pathname === '/' && (
             <WelcomeScreen onStartGenerating={handleStartGenerating} />
           )}
-          
+
           {/* Show form when /new route is active and no thread selected */}
           {showForm && !selectedThread && location.pathname === '/new' && (
             <ThreadForm onGenerate={handleGenerate} />
           )}
-          
+
           {threadLoading && (
             <div className="space-y-6">
               <CardSkeleton />

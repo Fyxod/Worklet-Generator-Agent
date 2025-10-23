@@ -1,5 +1,6 @@
 fastapi
 langchain
+langchain-core
 langchain-community
 tavily-python
 langchain-ollama
