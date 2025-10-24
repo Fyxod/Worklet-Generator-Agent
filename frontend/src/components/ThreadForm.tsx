@@ -146,7 +146,7 @@ export const ThreadForm = ({ onGenerate }: ThreadFormProps) => {
               type="file"
               id="file-upload"
               multiple
-              accept=".pdf,.ppt,.pptx,.jpg,.jpeg,.png,.md,.xlsx,.xls,.csv"
+              accept=".pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png,.md,.xlsx,.xls,.csv"
               onChange={handleFileChange}
               className="hidden"
             />
@@ -156,7 +156,7 @@ export const ThreadForm = ({ onGenerate }: ThreadFormProps) => {
                 Click to upload or drag and drop
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                PDF, PPT, JPG, MD (max 10 files)
+                PDF, DOC, PPT, JPG, MD (max 10 files)
               </p>
             </label>
           </div>
