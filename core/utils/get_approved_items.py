@@ -29,12 +29,6 @@ async def get_approved_items(domains, keywords, thread_id: str):
     try:
         response = await asyncio.wait_for(future, timeout=300)  # 5 minutes timeout
 
-        with open("debug/approved_topics.txt", "w", encoding="utf-8") as f:
-            f.write(str(response))
-
-        with open("debug/approved_topics.json", "w", encoding="utf-8") as f:
-            f.write(json.dumps(response, indent=2))
-
         print(response)
         approved_domains = response.get("domains", {}) if response else {}
         approved_keywords = response.get("keywords", {}) if response else {}

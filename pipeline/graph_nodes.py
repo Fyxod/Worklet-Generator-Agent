@@ -107,8 +107,6 @@ async def extract_keywords_domains(state: AgentState) -> AgentState:
     s = time.time()
     if SWITCHES["EXTRACT_KEYWORDS_DOMAINS"]:
         prompt = build_extraction_prompt(state)
-        with open("debug/extraction_prompt.txt", "w", encoding="utf-8") as f:
-            f.write(str(prompt))
 
         await update_message(
             {"message": "Extracting keywords and domains..."},
@@ -121,8 +119,6 @@ async def extract_keywords_domains(state: AgentState) -> AgentState:
             contents=prompt,
             port=KEYWORD_DOMAIN_EXTRACTION_LLM.port,
         )
-        with open("debug/keywords_domains.json", "w", encoding="utf-8") as f:
-            f.write(json.dumps(result.model_dump(), indent=2))
 
     else:
         # Use empty keywords and domains if extraction is disabled
@@ -144,9 +140,6 @@ async def generate_worklets(state: AgentState) -> AgentState:
     s = time.time()
     prompt = build_main_prompt(state)
 
-    with open("debug/main_prompt.txt", "w", encoding="utf-8") as f:
-        f.write(str(prompt))
-
     await update_message(
         {"message": "Generating worklets..."}, topic=f"{state.thread_id}/status_update"
     )
@@ -157,8 +150,7 @@ async def generate_worklets(state: AgentState) -> AgentState:
         contents=prompt,
         port=WORKLET_GENERATOR_LLM.port,
     )
-    with open("debug/worklet_generation.json", "w", encoding="utf-8") as f:
-        f.write(json.dumps(result.model_dump(), indent=2))
+
     state.generation_output = result
     print(f"Worklet generation took {time.time() - s:.2f} seconds")
     return state
@@ -186,8 +178,7 @@ async def web_search(state: AgentState) -> AgentState:
 
     print(f"Performing web search for queries: {queries}")
     web_search_results = await parallel_search(queries)
-    with open("debug/web_search_results.json", "w", encoding="utf-8") as f:
-        f.write(json.dumps(web_search_results, indent=2))
+
     state.web_search_results = web_search_results
     print(f"Web search took {time.time() - s:.2f} seconds")
     await update_message(
@@ -223,12 +214,6 @@ async def references(state: AgentState) -> AgentState:
                 )
                 keywords = result or default_keywords
 
-                async with aiofiles.open(
-                    f"debug/reference_keyword_{worklet.title}.txt",
-                    "w",
-                    encoding="utf-8",
-                ) as f:
-                    await f.write(str(result.model_dump()))
             except Exception as e:
                 print(
                     f"Error extracting reference keyword for worklet '{worklet.title}': {e}"
@@ -238,12 +223,6 @@ async def references(state: AgentState) -> AgentState:
             keywords = default_keywords
 
         references = await generate_references(keywords)
-        async with aiofiles.open(
-            f"debug/references_{worklet.title}.json", "w", encoding="utf-8"
-        ) as f:
-            await f.write(
-                json.dumps([ref.model_dump() for ref in references], indent=2)
-            )
 
         return Worklet(
             **worklet.model_dump(),
