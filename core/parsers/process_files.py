@@ -11,7 +11,7 @@ import time
 from app.broadcast import update_message, stop_broadcasting
 
 
-# ppt, pdf, xlsx, docx, txt, html, png, jpeg, jpg, md
+# ppt, pdf, xlsx, doc, docx, txt, html, png, jpeg, jpg, md
 async def process_files(
     files_data: List[dict],
     thread_id: str,

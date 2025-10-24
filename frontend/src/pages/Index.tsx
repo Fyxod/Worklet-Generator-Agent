@@ -49,6 +49,12 @@ const Index = () => {
     queries: string[];
   }>({ open: false, queries: [] });
 
+  // Helper to close any approval modals that might be open
+  const closeAllModals = () => {
+    setDomainKeywordModal({ open: false, data: null, message: undefined });
+    setWebQueryModal({ open: false, queries: [] });
+  };
+
   useEffect(() => {
     fetchThreads();
   }, []);
@@ -97,6 +103,8 @@ const Index = () => {
       } else {
         toast.error('Failed to fetch threads');
       }
+      // Close any open modals on error
+      closeAllModals();
     }
   };
 
@@ -136,6 +144,8 @@ const Index = () => {
       } else {
         toast.error('Failed to fetch thread');
       }
+      // Close any open modals on error
+      closeAllModals();
     }
     finally {
       setThreadLoading(false);
@@ -351,6 +361,8 @@ const Index = () => {
       setProgressMessages([]);
       stopInitializing();
       setWorklets([]);
+      // Close any open modals on error
+      closeAllModals();
     }
   };
 
@@ -406,6 +418,8 @@ const Index = () => {
       } else {
         toast.error(e instanceof Error ? e.message : 'Failed to delete thread');
       }
+      // Close any open modals on error
+      closeAllModals();
     }
   };
 

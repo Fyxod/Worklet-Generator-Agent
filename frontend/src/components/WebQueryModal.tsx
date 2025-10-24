@@ -41,14 +41,15 @@ export const WebQueryModal = ({ open, queries: initialQueries, onSubmit }: WebQu
 
   return (
     <Dialog open={open}>
-      <DialogContent className="max-w-2xl max-h-[80vh] bg-card border-border">
+      {/* Align modal layout with scrollable middle section */}
+      <DialogContent hideClose className="max-w-2xl max-h-[80vh] bg-card border-border grid-rows-[auto,1fr,auto]">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
             Web Queries
           </DialogTitle>
         </DialogHeader>
         
-        <ScrollArea className="h-[50vh] pr-4">
+        <ScrollArea className="min-h-0 pr-4">
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-4">
               <p className="text-sm text-muted-foreground">

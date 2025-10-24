@@ -20,7 +20,7 @@ async def get_approved_queries(queries: list, thread_id: str) -> list:
     await sio.emit(f"{thread_id}/web_approval", {"queries": queries})
 
     try:
-        response = await asyncio.wait_for(future, timeout=1800)  # 30 minutes timeout
+        response = await asyncio.wait_for(future, timeout=300)  # 5 minutes timeout
         approved_queries = response.get("queries", [])
         with open("debug/approved_queries.json", "w", encoding="utf-8") as f:
             f.write(json.dumps(approved_queries, indent=2))
