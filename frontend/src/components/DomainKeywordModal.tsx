@@ -127,7 +127,8 @@ export const DomainKeywordModal = ({ open, data, onSubmit, threadName, message }
 
   return (
     <Dialog open={open}>
-      <DialogContent hideClose className="max-w-4xl max-h-[80vh] bg-card border-border flex flex-col">
+      {/* Use grid rows so header/footer are auto-sized and middle content can scroll */}
+      <DialogContent hideClose className="max-w-4xl max-h-[80vh] bg-card border-border grid-rows-[auto,1fr,auto]">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
             {`Approve Domains & Keywords${threadName ? ` for ${threadName}` : ''}`}
@@ -137,7 +138,8 @@ export const DomainKeywordModal = ({ open, data, onSubmit, threadName, message }
           )}
         </DialogHeader>
         
-        <ScrollArea className="flex-1 min-h-0 pr-4">
+        {/* Make the middle section scrollable within the dialog's max height */}
+        <ScrollArea className="min-h-0 pr-4">
           <div className="grid grid-cols-2 gap-8 p-2">
             {/* Domains Column */}
             <div className="space-y-6">
