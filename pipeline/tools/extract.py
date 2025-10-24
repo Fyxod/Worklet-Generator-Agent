@@ -21,8 +21,7 @@ async def extract_links(urls: list[str], depth: str = "advanced") -> list:
                 urls=urls,
                 extract_depth=depth,
             )
-            with open("debug/extracted_links.json", "w", encoding="utf-8") as f:
-                f.write(json.dumps(results, indent=2))
+
             return results["results"]
         except Exception as e:
             attempts += 1

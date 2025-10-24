@@ -22,8 +22,6 @@ async def get_approved_queries(queries: list, thread_id: str) -> list:
     try:
         response = await asyncio.wait_for(future, timeout=300)  # 5 minutes timeout
         approved_queries = response.get("queries", [])
-        with open("debug/approved_queries.json", "w", encoding="utf-8") as f:
-            f.write(json.dumps(approved_queries, indent=2))
     
         print(f"Received approved queries from client {thread_id}: {approved_queries}")
     except asyncio.TimeoutError:
