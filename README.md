@@ -1,4 +1,4 @@
-# Multi-Modal-Enterprise-Knowledge-Synthesis-Platform
+# Worklet-Generator-Agent
 
 ![Callout](https://img.shields.io/badge/Warning-CPU%20Only%20Testing-red)
 
@@ -117,11 +117,11 @@ prism_vm.ps1
 ### 1. clone the repository
 
 ```bash
-git clone https://github.com/bugslayer01/Knowledge-Synthesis-Platform.git
+git clone https://github.com/bugslayer01/worklet-gen.git
 ```
 navigate into the project directory:
 ```bash
-cd Knowledge-Synthesis-Platform
+cd worklet-gen
 ```
 
 Follow these steps to set up and run the backend server:
