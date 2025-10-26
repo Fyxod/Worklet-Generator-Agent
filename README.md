@@ -80,7 +80,7 @@ prism_vm.ps1
 ### 1. clone the repository
 
 ```bash
-git clone https://github.com/bugslayer01/Knowledge-Synthesis-Platform.git
+git clone https://github.com/bugslayer01/worklet-gen.git
 ```
 navigate into the project directory:
 ```bash
