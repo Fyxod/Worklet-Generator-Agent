@@ -83,6 +83,12 @@ if `npm -v` error's out try restarting your terminal / pc / vscode
 - After installation, Ollama runs as a background service and exposes a local server at:  
   **http://localhost:11434**  
 
+Run ollama using the following command
+```bash
+ollama serve 
+```
+if it shows port occupied `dont panic` just move to the next step.
+
 Verify the installation:
 ```powershell
 ollama --version
