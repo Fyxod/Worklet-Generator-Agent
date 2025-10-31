@@ -2,12 +2,35 @@ from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import StreamingResponse
 from typing import List
 import io, zipfile
+import unicodedata
+import re
+from urllib.parse import quote
 from core.models.worklet import Worklet
 from core.utils.generate_files import create_pdf, create_ppt
 from core.utils.sanitize_filename import sanitize_filename
 from core.database import db
 
 router = APIRouter(prefix="/thread", tags=["thread"])
+
+
+def _content_disposition(filename: str) -> str:
+    """Build a RFC 5987/6266 compatible Content-Disposition header value.
+
+    Starlette encodes header values using latin-1. Non-ASCII filenames will
+    raise UnicodeEncodeError if passed directly. To support Unicode filenames
+    we provide an ASCII fallback `filename=` and a UTF-8 encoded `filename*`.
+    """
+    # ASCII-only fallback (strip quotes/unsafe chars)
+    fallback = (
+        unicodedata.normalize("NFKD", filename).encode("ascii", "ignore").decode("ascii")
+    )
+    if not fallback:
+        fallback = "download"
+    # Keep it safe for HTTP header tokens
+    fallback = re.sub(r"[^A-Za-z0-9._-]", "_", fallback)
+    # RFC 5987 percent-encoded UTF-8 for the actual filename
+    encoded = quote(filename)
+    return f"attachment; filename={fallback}; filename*=UTF-8''{encoded}"
 
 
 @router.get("/all")
@@ -113,7 +136,7 @@ async def download_all_worklets(thread_id: str, file_type: str):
     return StreamingResponse(
         zip_buffer,
         media_type="application/zip",
-        headers={"Content-Disposition": f"attachment; filename={zf_name}"},
+        headers={"Content-Disposition": _content_disposition(zf_name)},
     )
 
 
@@ -157,5 +180,5 @@ async def download_worklet(thread_id: str, worklet_id: str, file_type: str):
     return StreamingResponse(
         io.BytesIO(data),
         media_type=media_type,
-        headers={"Content-Disposition": f"attachment; filename={download_name}"},
+        headers={"Content-Disposition": _content_disposition(download_name)},
     )

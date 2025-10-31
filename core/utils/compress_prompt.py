@@ -68,7 +68,7 @@ def compress_main_prompt(
         per_item_budget = max(1, total_budget // len(texts))
         return [trim_text(t, per_item_budget, aggressiveness) for t in texts]
 
-    def compress_pass(state: "AgentState", aggressiveness: float) -> "AgentState":
+    def compress_pass(state: AgentState, aggressiveness: float) -> AgentState:
         """One compression pass with fixed aggressiveness."""
         # --- Step 1: Base prompt tokens ---
         base_prompt_tokens = count_tokens(
@@ -135,20 +135,29 @@ def compress_main_prompt(
             project_texts, proj_budget, aggressiveness
         )
 
+        # Build safe string representations for links; guard against None values and unexpected types
         link_texts = [
             (
-                str(link)
+                link
                 if isinstance(link, str)
-                else " ".join(
-                    [
-                        link.get("title", ""),
-                        link.get("content", ""),
-                        link.get("url", ""),
-                    ]
+                else (
+                    # For dict-like links, join known fields, skipping falsy parts and casting to str
+                    " ".join(
+                        str(part)
+                        for part in (
+                            link.get("title"),
+                            link.get("content"),
+                            link.get("url"),
+                        )
+                        if part
+                    )
+                    if isinstance(link, dict)
+                    else ("" if link is None else str(link))
                 )
             )
             for link in links
         ]
+
         compressed_links = compress_list_texts(link_texts, link_budget, aggressiveness)
 
         web_texts = [

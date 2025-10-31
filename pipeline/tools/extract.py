@@ -12,7 +12,7 @@ tavily_api_key = os.getenv("TAVILY_API_KEY")
 client = TavilyClient(api_key=tavily_api_key)
 
 
-async def extract_links(urls: list[str], depth: str = "advanced") -> list:
+async def extract_links(urls: list[str], depth: str = "advanced") -> list[dict]:
     attempts = 0
     while attempts < 5:
         try:
@@ -21,7 +21,7 @@ async def extract_links(urls: list[str], depth: str = "advanced") -> list:
                 urls=urls,
                 extract_depth=depth,
             )
-
+            
             return results["results"]
         except Exception as e:
             attempts += 1
