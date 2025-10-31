@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     API_KEY_5: str
     QUERY_URL: str
     OPENAI_API: str
+    REMOTE_GPU: bool = False
 
     class Config:
         env_file = ".env"

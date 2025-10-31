@@ -1,4 +1,5 @@
 from core.models.gpu_config import GPULLMConfig
+from core.config import settings
 
 # SETTINGS
 SWITCHES = {
@@ -8,7 +9,7 @@ SWITCHES = {
     "FALLBACK_TO_GEMINI": True,  # Fallback to Gemini if Ollama fails
     "FALLBACK_TO_OPENAI": False,  # Fallback to OpenAI if BOTH Ollama and Gemini fails
 
-    "REMOTE_GPU": True,  # Use remote GPU LLMs
+    "REMOTE_GPU": settings.REMOTE_GPU,  # Use remote GPU LLMs
     # please refer to core/Setup_Local_ollama.md for setting up local LLM server
 }
 

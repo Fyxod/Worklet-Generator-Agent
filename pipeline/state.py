@@ -16,7 +16,7 @@ class AgentState(BaseModel):
     parsed_data: Optional[Documents] = None
     generation_output: Optional[WorkletGenerationResult] = None
     keywords_domains: Optional[SimpleDomainsKeywords] = None
-    links_data: Optional[list[Any]] = Field(default_factory=list)
+    links_data: Optional[list[Dict]] = Field(default_factory=list)
     web_search: Optional[bool] = False
     web_search_results: Optional[Union[Dict, List]] = Field(default_factory=list)
     worklets: Optional[List[Worklet]] = Field(default_factory=list)
