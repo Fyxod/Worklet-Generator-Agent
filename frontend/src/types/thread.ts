@@ -39,6 +39,8 @@ export interface TransformedWorklet {
   problem_statement: StringAttribute;
   /** Transformed description attribute */
   description: StringAttribute;
+  /** LLM's rationale for why this worklet was proposed */
+  reasoning: string;
   /** Transformed challenge use case attribute */
   challenge_use_case: StringAttribute;
   /** Transformed deliverables attribute */
@@ -66,6 +68,8 @@ export interface Worklet {
   problem_statement: string;
   /** Description of the project idea (providing context/background, max 100 words) */
   description: string;
+  /** LLM's rationale for why this worklet was proposed */
+  reasoning: string;
   /** Specific challenge or use case addressed by the project idea */
   challenge_use_case: string;
   /** Expected deliverables of the project idea */

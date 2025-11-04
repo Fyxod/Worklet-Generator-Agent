@@ -3,6 +3,7 @@ def transform_worklet(worklet):
     transformed = {
         "worklet_id": worklet["worklet_id"],
         "references": worklet["references"],
+        "reasoning": str(worklet.get("reasoning", "") or ""),
     }
     string_attrs = [
         "title",

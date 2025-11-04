@@ -18,6 +18,7 @@ _STRING_FIELDS = {
     "title",
     "problem_statement",
     "description",
+    "reasoning",
     "challenge_use_case",
     "deliverables",
     "infrastructure_requirements",
@@ -62,7 +63,13 @@ def _normalize_worklet_record(record: dict) -> dict:
 
     # Strings
     for f in _STRING_FIELDS:
-        normalized[f] = _pick_selected_value(record.get(f))
+        value = _pick_selected_value(record.get(f))
+        if isinstance(value, str):
+            normalized[f] = value
+        elif value is None:
+            normalized[f] = ""
+        else:
+            normalized[f] = str(value)
 
     # Arrays
     for f in _ARRAY_FIELDS:

@@ -25,6 +25,10 @@ class Worklet(BaseModel):
         ...,
         description="Description of the project idea (providing context/background, max 100 words)",
     )
+    reasoning: str = Field(
+        "",
+        description="LLM's rationale for why this worklet was proposed",
+    )
     challenge_use_case: str = Field(
         ..., description="Specific challenge or use case addressed by the project idea"
     )
@@ -81,6 +85,10 @@ class TransformedWorklet(BaseModel):
     )
     description: StringAttribute = Field(
         ..., description="Transformed description attribute"
+    )
+    reasoning: str = Field(
+        "",
+        description="LLM's rationale for why this worklet was proposed",
     )
     challenge_use_case: StringAttribute = Field(
         ..., description="Transformed challenge use case attribute"

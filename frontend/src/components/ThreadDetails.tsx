@@ -543,6 +543,7 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet }: ThreadDetai
                     );
                   })}
 
+                  <ReasoningField reasoning={activeWorklet.reasoning} />
                   <ReferencesField references={activeWorklet.references} />
                 </div>
               </ScrollArea>
@@ -651,6 +652,25 @@ const MilestonesContent = ({ milestones }: { milestones: Record<string, unknown>
         </div>
       ))}
     </div>
+  );
+};
+
+const ReasoningField = ({ reasoning }: { reasoning: string }) => {
+  const safe = normalizeWrapText(reasoning ?? '');
+  const hasContent = safe.trim().length > 0;
+  return (
+    <section className="space-y-2">
+      <div className="flex items-center gap-2">
+        <h4 className="text-sm font-semibold text-foreground">Reasoning</h4>
+      </div>
+      <div className="rounded border border-border bg-muted/20 p-3">
+        {hasContent ? (
+          <p className="whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]">{safe}</p>
+        ) : (
+          <p className="text-sm text-muted-foreground">No reasoning provided for this worklet.</p>
+        )}
+      </div>
+    </section>
   );
 };
 

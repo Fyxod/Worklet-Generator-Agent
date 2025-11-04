@@ -94,9 +94,22 @@ def _extract_iteration_value(
 def _hydrate_worklet(
     worklet_record: dict, override_field: str, override_index: int
 ) -> Worklet:
+    raw_reasoning = worklet_record.get("reasoning", "")
+    if isinstance(raw_reasoning, dict):
+        raw_reasoning = _extract_iteration_value(
+            "reasoning",
+            raw_reasoning,
+            raw_reasoning.get("selected_index", 0),
+        )
+    elif raw_reasoning is None:
+        raw_reasoning = ""
+
     payload = {
         "worklet_id": worklet_record["worklet_id"],
         "references": deepcopy(worklet_record.get("references", [])),
+        "reasoning": (
+            raw_reasoning if isinstance(raw_reasoning, str) else str(raw_reasoning)
+        ),
     }
 
     for field_name in ALL_FIELDS:
@@ -187,7 +200,7 @@ async def iterate_worklet(payload: IterateRequest):
 
     async with aiofiles.open("debug_iteration_prompt.json", "w", encoding="utf-8") as f:
         await f.write(iteration_prompt)
-        
+
     new_value = None
     last_error_detail = None
 
