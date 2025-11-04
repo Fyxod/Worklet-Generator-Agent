@@ -337,9 +337,22 @@ def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
         prs.slide_height = Pt(1100)
         slide_layout = prs.slide_layouts[6]
 
+        # Pagination state (top measured in inches)
         slide = prs.slides.add_slide(slide_layout)
-        top = 0.5  # inches from top
+        top = 0.5  # inches from top (top margin)
         gap = DEFAULT_PPT_GAP_INCH
+        top_margin = 0.5
+        bottom_margin = 0.5
+        slide_height_in = prs.slide_height.inches
+
+        # helper to ensure there is space on current slide, otherwise create a new slide
+        def _ensure_space(needed_height: float):
+            nonlocal slide, top
+            usable_bottom = slide_height_in - bottom_margin
+            # If content would overflow the usable area, start a new slide
+            if top + needed_height > usable_bottom:
+                slide = prs.slides.add_slide(slide_layout)
+                top = top_margin
 
         # Helper to safely retrieve textual fields
         def _text_for(keys: Sequence[str]) -> str:
@@ -349,21 +362,26 @@ def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
         # Title block
         title_text = _text_for(FIELD_KEYS["title"])
         if title_text:
+            # compute estimated height and ensure page space
             try:
+                est_h = estimate_height_wrapped_Title(title_text)
+                _ensure_space(est_h + gap)
                 top = add_textbox_Title(slide, "Title", title_text, top) + gap
             except NameError:
                 # Fallback: create a basic textbox if helper not present
+                est_h = 0.6
+                _ensure_space(est_h + gap)
                 left = Inches(0.5)
                 top_inch = Inches(top)
                 width = Inches(9.5)
-                height = Inches(0.6)
+                height = Inches(est_h)
                 tb = slide.shapes.add_textbox(left, top_inch, width, height)
                 tf = tb.text_frame
                 tf.clear()
                 p = tf.paragraphs[0]
                 p.text = title_text
                 p.font.size = Pt(22)
-                top += 0.6 + gap
+                top += est_h + gap
 
         # Core textual fields (add if present)
         for field_key in (
@@ -374,23 +392,28 @@ def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
         ):
             text = _text_for(FIELD_KEYS[field_key])
             if text:
+                # estimate height and ensure page space
                 try:
+                    est_h = estimate_height_wrapped_content(text)
+                    _ensure_space(est_h + gap)
                     top = add_textbox(
                         slide, field_key.replace("_", " ").title(), text, top
                     )
                 except NameError:
                     # Fallback simple textbox
+                    est_h = 0.8
+                    _ensure_space(est_h + gap)
                     left = Inches(0.5)
                     top_inch = Inches(top)
                     width = Inches(9.5)
-                    height = Inches(0.8)
+                    height = Inches(est_h)
                     tb = slide.shapes.add_textbox(left, top_inch, width, height)
                     tf = tb.text_frame
                     tf.clear()
                     p = tf.paragraphs[0]
                     p.text = f"{field_key.replace('_', ' ').title()}: {text}"
                     p.font.size = Pt(14)
-                    top += 0.8 + gap
+                    top += est_h + gap
 
         # KPIs (list)
         raw_kpis = safe_get(worklet, FIELD_KEYS["kpis"])
@@ -399,12 +422,16 @@ def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
             kpi_text = "\n".join([f"• {str(k)}" for k in kpis if k not in (None, "")])
             if kpi_text:
                 try:
+                    est_h = estimate_height_wrapped_content(kpi_text)
+                    _ensure_space(est_h + gap)
                     top = add_textbox(slide, "KPIs", kpi_text, top)
                 except NameError:
+                    est_h = min(2.0, 0.3 * len(kpis) + 0.2)
+                    _ensure_space(est_h + gap)
                     left = Inches(0.5)
                     top_inch = Inches(top)
                     width = Inches(9.5)
-                    height = Inches(min(2.0, 0.3 * len(kpis) + 0.2))
+                    height = Inches(est_h)
                     tb = slide.shapes.add_textbox(left, top_inch, width, height)
                     tf = tb.text_frame
                     tf.clear()
@@ -415,7 +442,7 @@ def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
                         else:
                             p = tf.add_paragraph()
                             p.text = f"• {k}"
-                    top += height.inches + gap
+                    top += est_h + gap
 
         # Prerequisites (list)
         raw_prereqs = safe_get(worklet, FIELD_KEYS["prerequisites"])
@@ -426,12 +453,16 @@ def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
             )
             if preq_text:
                 try:
+                    est_h = estimate_height_wrapped_content(preq_text)
+                    _ensure_space(est_h + gap)
                     top = add_textbox(slide, "Prerequisites", preq_text, top)
                 except NameError:
+                    est_h = min(2.0, 0.3 * len(prereqs) + 0.2)
+                    _ensure_space(est_h + gap)
                     left = Inches(0.5)
                     top_inch = Inches(top)
                     width = Inches(9.5)
-                    height = Inches(min(2.0, 0.3 * len(prereqs) + 0.2))
+                    height = Inches(est_h)
                     tb = slide.shapes.add_textbox(left, top_inch, width, height)
                     tf = tb.text_frame
                     tf.clear()
@@ -442,38 +473,46 @@ def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
                         else:
                             p_par = tf.add_paragraph()
                             p_par.text = f"• {p}"
-                    top += height.inches + gap
+                    top += est_h + gap
 
         # Infra & Tech Stack
         infra = _text_for(FIELD_KEYS["infrastructure_requirements"])
         if infra:
             try:
+                est_h = estimate_height_wrapped_content(infra)
+                _ensure_space(est_h + gap)
                 top = add_textbox(slide, "Infrastructure Requirements", infra, top)
             except NameError:
+                est_h = 0.6
+                _ensure_space(est_h + gap)
                 left = Inches(0.5)
                 top_inch = Inches(top)
                 width = Inches(9.5)
-                height = Inches(0.6)
+                height = Inches(est_h)
                 tb = slide.shapes.add_textbox(left, top_inch, width, height)
                 tf = tb.text_frame
                 tf.clear()
                 tf.paragraphs[0].text = f"Infrastructure Requirements: {infra}"
-                top += height.inches + gap
+                top += est_h + gap
 
         tech = _text_for(FIELD_KEYS["tech_stack"])
         if tech:
             try:
+                est_h = estimate_height_wrapped_content(tech)
+                _ensure_space(est_h + gap)
                 top = add_textbox(slide, "Tentative Tech Stack", tech, top)
             except NameError:
+                est_h = 0.6
+                _ensure_space(est_h + gap)
                 left = Inches(0.5)
                 top_inch = Inches(top)
                 width = Inches(9.5)
-                height = Inches(0.6)
+                height = Inches(est_h)
                 tb = slide.shapes.add_textbox(left, top_inch, width, height)
                 tf = tb.text_frame
                 tf.clear()
                 tf.paragraphs[0].text = f"Tentative Tech Stack: {tech}"
-                top += height.inches + gap
+                top += est_h + gap
 
         # Milestones
         milestones = safe_get(worklet, FIELD_KEYS["milestones"])
@@ -483,14 +522,18 @@ def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
             )
             if milestone_text:
                 try:
+                    est_h = estimate_height_wrapped_content(milestone_text)
+                    _ensure_space(est_h + gap)
                     top = add_textbox(
                         slide, "Milestones (6 months)", milestone_text, top
                     )
                 except NameError:
+                    est_h = min(2.5, 0.25 * len(milestones) + 0.2)
+                    _ensure_space(est_h + gap)
                     left = Inches(0.5)
                     top_inch = Inches(top)
                     width = Inches(9.5)
-                    height = Inches(min(2.5, 0.25 * len(milestones) + 0.2))
+                    height = Inches(est_h)
                     tb = slide.shapes.add_textbox(left, top_inch, width, height)
                     tf = tb.text_frame
                     tf.clear()
@@ -500,17 +543,20 @@ def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
                         else:
                             p = tf.add_paragraph()
                             p.text = f"{k}: {v}"
-                    top += height.inches + gap
+                    top += est_h + gap
 
         # References block (list)
         raw_refs = safe_get(worklet, FIELD_KEYS["references"]) or []
         refs = ensure_list(raw_refs)
         if refs:
+            # estimate references block height (each ref ~0.4 inch)
+            est_h = min(3.5, 0.4 * len(refs) + 0.2)
+            _ensure_space(est_h + gap)
             left = Inches(0.5)
             top_inch = Inches(top)
             width = Inches(9.5)
             # each ref ~0.4 inch height estimate
-            height = Inches(min(3.5, 0.4 * len(refs) + 0.2))
+            height = Inches(est_h)
             textbox = slide.shapes.add_textbox(left, top_inch, width, height)
             tf = textbox.text_frame
             tf.word_wrap = True
@@ -601,7 +647,7 @@ def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
                     fallback_run.font.name = "Calibri"
                     fallback_run.font.color.rgb = RGBColor(0, 102, 204)
 
-            top += height.inches + gap
+            top += est_h + gap
 
         # Save PPT
         if in_memory:
@@ -641,7 +687,8 @@ def add_textbox(slide, title, content, top_inch):
     left = Inches(0.5)
     top = Inches(top_inch)
     width = Inches(9.5)
-    height = estimate_height_wrapped_content(content)
+    height_inches = estimate_height_wrapped_content(content)
+    height = Inches(height_inches)
     textbox = slide.shapes.add_textbox(left, top, width, height)
     tf = textbox.text_frame
     tf.word_wrap = True
@@ -662,14 +709,15 @@ def add_textbox(slide, title, content, top_inch):
     run_content.font.size = Pt(15)
     run_content.font.name = "Calibri"
 
-    return top_inch + height + gap
+    return top_inch + height_inches + gap
 
 
 def add_textbox_Title(slide, title, content, top_inch):
     left = Inches(0.5)
     top = Inches(top_inch)
     width = Inches(9.5)
-    height = estimate_height_wrapped_Title(content)
+    height_inches = estimate_height_wrapped_Title(content)
+    height = Inches(height_inches)
     textbox = slide.shapes.add_textbox(left, top, width, height)
     tf = textbox.text_frame
     tf.word_wrap = True
@@ -692,4 +740,4 @@ def add_textbox_Title(slide, title, content, top_inch):
     run_content.font.bold = True
     run_content.font.color.rgb = RGBColor(0x00, 0x66, 0xCC)
 
-    return top_inch + height + gap
+    return top_inch + height_inches + gap
