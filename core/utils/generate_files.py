@@ -6,7 +6,7 @@ import io
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfgen import canvas
-from reportlab.platypus import Frame, Paragraph
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 
 from pptx import Presentation
 from pptx.util import Inches, Pt
@@ -147,11 +147,7 @@ def create_pdf(filename: str, worklet: Worklet, in_memory: bool = False):
     This function is resilient to missing fields and supports both dict-like and attribute-like worklets.
     """
     try:
-        if in_memory:
-            buffer = io.BytesIO()
-            pdf = canvas.Canvas(buffer, pagesize=CUSTOM_PAGE_SIZE)
-        else:
-            pdf = canvas.Canvas(filename, pagesize=CUSTOM_PAGE_SIZE)
+        # Use SimpleDocTemplate and platypus flowables so ReportLab handles pagination
         width, height = CUSTOM_PAGE_SIZE
 
         styles = getSampleStyleSheet()
@@ -172,35 +168,39 @@ def create_pdf(filename: str, worklet: Worklet, in_memory: bool = False):
             bulletIndent=10,
         )
 
-        frame = Frame(40, 40, width - 80, height - 100, showBoundary=0)
         elements = []
 
         # Title & core fields - only add if present and non-empty
         title = safe_get(worklet, FIELD_KEYS["title"])
         if title:
             elements.append(Paragraph(f"<b>Title:</b> {title}", header_style))
+            elements.append(Spacer(1, 6))
 
         problem = safe_get(worklet, FIELD_KEYS["problem_statement"])
         if problem:
             elements.append(
                 Paragraph(f"<b>Problem Statement:</b> {problem}", normal_style)
             )
+            elements.append(Spacer(1, 6))
 
         desc = safe_get(worklet, FIELD_KEYS["description"])
         if desc:
             elements.append(Paragraph(f"<b>Description:</b> {desc}", normal_style))
+            elements.append(Spacer(1, 6))
 
         challenge = safe_get(worklet, FIELD_KEYS["challenge_use_case"])
         if challenge:
             elements.append(
                 Paragraph(f"<b>Challenge / Use Case:</b> {challenge}", normal_style)
             )
+            elements.append(Spacer(1, 6))
 
         deliverables = safe_get(worklet, FIELD_KEYS["deliverables"])
         if deliverables:
             elements.append(
                 Paragraph(f"<b>Deliverables:</b> {deliverables}", normal_style)
             )
+            elements.append(Spacer(1, 6))
 
         # KPIs (list)
         raw_kpis = safe_get(worklet, FIELD_KEYS["kpis"])
@@ -210,6 +210,7 @@ def create_pdf(filename: str, worklet: Worklet, in_memory: bool = False):
             for kpi in kpis:
                 if kpi is not None and str(kpi).strip():
                     elements.append(Paragraph(f"• {str(kpi)}", bullet_style))
+            elements.append(Spacer(1, 6))
 
         # Prerequisites (list)
         raw_prereqs = safe_get(worklet, FIELD_KEYS["prerequisites"])
@@ -219,6 +220,7 @@ def create_pdf(filename: str, worklet: Worklet, in_memory: bool = False):
             for prereq in prereqs:
                 if prereq is not None and str(prereq).strip():
                     elements.append(Paragraph(f"• {str(prereq)}", bullet_style))
+            elements.append(Spacer(1, 6))
 
         # Infra & Tech Stack
         infra = safe_get(worklet, FIELD_KEYS["infrastructure_requirements"])
@@ -226,12 +228,14 @@ def create_pdf(filename: str, worklet: Worklet, in_memory: bool = False):
             elements.append(
                 Paragraph(f"<b>Infrastructure Requirements:</b> {infra}", normal_style)
             )
+            elements.append(Spacer(1, 6))
 
         tech = safe_get(worklet, FIELD_KEYS["tech_stack"])
         if tech:
             elements.append(
                 Paragraph(f"<b>Tentative Tech Stack:</b> {tech}", normal_style)
             )
+            elements.append(Spacer(1, 6))
 
         # Milestones (dict)
         milestones = safe_get(worklet, FIELD_KEYS["milestones"])
@@ -247,6 +251,7 @@ def create_pdf(filename: str, worklet: Worklet, in_memory: bool = False):
             for k, v in milestones.items():
                 if k not in ("M2", "M4", "M6") and v not in (None, ""):
                     elements.append(Paragraph(f"• {k}: {v}", bullet_style))
+            elements.append(Spacer(1, 6))
 
         # References: support list of Reference objects or dicts
         raw_refs = safe_get(worklet, FIELD_KEYS["references"]) or []
@@ -280,6 +285,7 @@ def create_pdf(filename: str, worklet: Worklet, in_memory: bool = False):
 
                 if composed:
                     elements.append(Paragraph(composed, bullet_style))
+            elements.append(Spacer(1, 6))
 
         # If no elements were added, add a minimal notice so the PDF is not blank
         if not elements:
@@ -287,12 +293,31 @@ def create_pdf(filename: str, worklet: Worklet, in_memory: bool = False):
                 Paragraph("No content available for this worklet.", normal_style)
             )
 
-        frame.addFromList(elements, pdf)
-        pdf.save()
+        # Build document - supports pagination automatically
         if in_memory:
+            buffer = io.BytesIO()
+            doc = SimpleDocTemplate(
+                buffer,
+                pagesize=CUSTOM_PAGE_SIZE,
+                leftMargin=40,
+                rightMargin=40,
+                topMargin=60,
+                bottomMargin=40,
+            )
+            doc.build(elements)
             data = buffer.getvalue()
             buffer.close()
             return data
+        else:
+            doc = SimpleDocTemplate(
+                filename,
+                pagesize=CUSTOM_PAGE_SIZE,
+                leftMargin=40,
+                rightMargin=40,
+                topMargin=60,
+                bottomMargin=40,
+            )
+            doc.build(elements)
 
     except Exception as e:
         print(f"Failed to generate PDF {filename}: {e}")
