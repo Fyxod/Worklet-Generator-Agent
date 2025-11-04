@@ -10,6 +10,7 @@ from core.llm.client import invoke_llm
 from core.constants import WORKLET_GENERATOR_LLM
 from core.llm.prompts.iteration_prompt import build_iteration_prompt
 from core.models.worklet import Worklet
+import aiofiles
 
 
 MAX_MODEL_ATTEMPTS = 10
@@ -184,8 +185,8 @@ async def iterate_worklet(payload: IterateRequest):
         user_prompt=payload.prompt,
     )
 
-    with open("debug_iteration_prompt.json", "w", encoding="utf-8") as f:
-        f.write(iteration_prompt)
+    async with aiofiles.open("debug_iteration_prompt.json", "w", encoding="utf-8") as f:
+        await f.write(iteration_prompt)
         
     new_value = None
     last_error_detail = None
