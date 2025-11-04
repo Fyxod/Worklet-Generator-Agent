@@ -48,6 +48,7 @@ from core.utils.get_approved_items import get_approved_items
 from core.utils.get_approved_queries import get_approved_queries
 from core.utils.fix_dashes import fix_dashes
 from app.broadcast import update_message, stop_broadcasting
+from core.utils.transform_worklet import transform_worklet
 
 os.makedirs("debug", exist_ok=True)
 
@@ -316,7 +317,7 @@ async def generate_files(state: AgentState) -> AgentState:
     # update the worklet files in the db
     db.threads.update_one(
         {"thread_id": state.thread_id},
-        {"$set": {"worklets": [w.model_dump() for w in state.worklets]}},
+        {"$set": {"worklets": [transform_worklet(w.model_dump()) for w in state.worklets]}},
     )
 
     s = time.time()

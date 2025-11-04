@@ -9,6 +9,54 @@ export interface Reference {
   tag: string;
 }
 
+export interface StringAttribute {
+  /** Index pointing at the selected iteration */
+  selected_index: number;
+  /** All candidate iterations for this attribute */
+  iterations: string[];
+}
+
+export interface ArrayAttribute {
+  /** Index pointing at the selected iteration */
+  selected_index: number;
+  /** All candidate iterations for this attribute */
+  iterations: string[][];
+}
+
+export interface ObjectAttribute {
+  /** Index pointing at the selected iteration */
+  selected_index: number;
+  /** All candidate iterations for this attribute */
+  iterations: Record<string, unknown>[];
+}
+
+export interface TransformedWorklet {
+  /** Unique identifier for the worklet */
+  worklet_id: string;
+  /** Transformed title attribute */
+  title: StringAttribute;
+  /** Transformed problem statement attribute */
+  problem_statement: StringAttribute;
+  /** Transformed description attribute */
+  description: StringAttribute;
+  /** Transformed challenge use case attribute */
+  challenge_use_case: StringAttribute;
+  /** Transformed deliverables attribute */
+  deliverables: StringAttribute;
+  /** Transformed KPIs attribute */
+  kpis: ArrayAttribute;
+  /** Transformed prerequisites attribute */
+  prerequisites: ArrayAttribute;
+  /** Transformed infrastructure requirements attribute */
+  infrastructure_requirements: StringAttribute;
+  /** Transformed tech stack attribute */
+  tech_stack: StringAttribute;
+  /** Transformed milestones attribute */
+  milestones: ObjectAttribute;
+  /** List of relevant academic references or papers for the project idea */
+  references: Reference[];
+}
+
 export interface Worklet {
   /** Unique identifier for the worklet */
   worklet_id: string;
@@ -36,6 +84,34 @@ export interface Worklet {
   references: Reference[];
 }
 
+export type WorkletPayload = Worklet | TransformedWorklet;
+
+export type WorkletFieldKey =
+  | 'title'
+  | 'problem_statement'
+  | 'description'
+  | 'challenge_use_case'
+  | 'deliverables'
+  | 'kpis'
+  | 'prerequisites'
+  | 'infrastructure_requirements'
+  | 'tech_stack'
+  | 'milestones';
+
+export interface SelectIterationResponse {
+  success: boolean;
+  worklet_id: string;
+  field: WorkletFieldKey;
+  selected_index: number;
+}
+
+export interface IterateWorkletResponse {
+  worklet_id: string;
+  field: WorkletFieldKey;
+  selected_index: number;
+  iterations: unknown[];
+}
+
 export interface Thread {
   thread_id: string;
   thread_name: string;
@@ -45,10 +121,14 @@ export interface Thread {
   count: number;
   generated: boolean;
   created_at: string;
-  worklets?: Worklet[]; // updated to structured worklets
+  worklets?: TransformedWorklet[];
   /** Indicates this thread object was created optimistically on the client and not yet confirmed via GET /thread/{id} */
   local?: boolean;
 }
+
+export type ThreadApiResponse = Omit<Thread, 'worklets'> & {
+  worklets?: WorkletPayload[];
+};
 
 export interface DomainsKeywords {
   domains: {

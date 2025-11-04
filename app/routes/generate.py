@@ -8,6 +8,8 @@ from core.database import db
 from pipeline.builder import Pipeline
 from core.utils.process_array_string import process_array_string
 from app.broadcast import update_message
+from core.utils.transform_worklet import transform_worklet
+
 router = APIRouter(prefix="/generate", tags=["generate"])
 
 
@@ -75,8 +77,10 @@ async def generate(
         [worklet.model_dump() for worklet in state.worklets] if state.worklets else []
     )
 
+    transformed_worklets = [transform_worklet(w) for w in worklets]
+
     return {
         "thread_id": thread_id,
-        "worklets": worklets,
-        "worklet_count": len(worklets),
+        "worklets": transformed_worklets,
+        "worklet_count": len(transformed_worklets),
     }

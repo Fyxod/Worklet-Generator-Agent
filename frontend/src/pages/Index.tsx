@@ -7,12 +7,13 @@ import { ProgressBar } from '@/components/ProgressBar';
 import { DomainKeywordModal } from '@/components/DomainKeywordModal';
 import { WebQueryModal } from '@/components/WebQueryModal';
 import { ThreadDetails } from '@/components/ThreadDetails';
-import { Thread, DomainsKeywords, ProgressMessage, Worklet } from '@/types/thread';
+import { Thread, DomainsKeywords, ProgressMessage, TransformedWorklet, ThreadApiResponse, WorkletPayload } from '@/types/thread';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getSocket } from '@/lib/socket';
 import { toast } from 'sonner';
 import { API_URL } from '@/config';
 import { ApiError, requestJson, formatValidationDetails } from '@/lib/http';
+import { normalizeThreadResponse, ensureTransformedWorklet } from '@/lib/worklet';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -24,14 +25,14 @@ const Index = () => {
   const [threadLoading, setThreadLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [progressMessages, setProgressMessages] = useState<ProgressMessage[]>([]);
-  const [worklets, setWorklets] = useState<Worklet[]>([]);
+  const [worklets, setWorklets] = useState<TransformedWorklet[]>([]);
   // Initialization placeholder state for brand-new thread creation
   const [isInitializing, setIsInitializing] = useState<boolean>(false);
   const isInitializingRef = useRef<boolean>(false);
   const initTimeoutRef = useRef<number | null>(null);
   // Stores to preserve per-thread progress & worklets when user navigates away
   const [progressStore, setProgressStore] = useState<Record<string, ProgressMessage[]>>({});
-  const [workletsStore, setWorkletsStore] = useState<Record<string, Worklet[]>>({});
+  const [workletsStore, setWorkletsStore] = useState<Record<string, TransformedWorklet[]>>({});
   // Keep track of current socket event bindings for cleanup
   const socketCleanupRef = useRef<() => void>(() => { });
 
@@ -87,10 +88,11 @@ const Index = () => {
 
   const fetchThreads = async () => {
     try {
-      const data = await requestJson<{ threads: Thread[] }>(`${API_URL}/thread/all`);
-      const fetched: Thread[] = data.threads || [];
+      const data = await requestJson<{ threads: ThreadApiResponse[] }>(`${API_URL}/thread/all`);
+      const fetched: ThreadApiResponse[] = data.threads || [];
+      const normalized = fetched.map(normalizeThreadResponse);
       // Sort descending by created_at (most recent first). Guard against invalid dates.
-      const sorted = [...fetched].sort((a, b) => {
+      const sorted = [...normalized].sort((a, b) => {
         const aTime = a?.created_at ? new Date(a.created_at).getTime() : 0;
         const bTime = b?.created_at ? new Date(b.created_at).getTime() : 0;
         return bTime - aTime; // descending
@@ -111,19 +113,20 @@ const Index = () => {
   const fetchThread = async (id: string) => {
     try {
       setThreadLoading(true);
-      const data = await requestJson<Thread>(`${API_URL}/thread/${id}`);
-      setSelectedThread(data);
+      const apiThread = await requestJson<ThreadApiResponse>(`${API_URL}/thread/${id}`);
+      const normalizedThread = normalizeThreadResponse(apiThread);
+      setSelectedThread(normalizedThread);
 
-      if (!data.generated) {
+      if (!normalizedThread.generated) {
         setupSocketListeners(id);
         // Do NOT start initializing when navigating to an existing thread
         // Only show initialization for brand-new local thread creation
         setProgressMessages([]);
         setWorklets(workletsStore[id] || []);
       } else {
-        if (data.worklets && data.worklets.length > 0) {
-          setWorkletsStore(prev => ({ ...prev, [id]: data.worklets }));
-          setWorklets(data.worklets);
+        if (normalizedThread.worklets && normalizedThread.worklets.length > 0) {
+          setWorkletsStore(prev => ({ ...prev, [id]: normalizedThread.worklets }));
+          setWorklets(normalizedThread.worklets);
         } else {
           // use any stored worklets if available
           setWorklets(workletsStore[id] || []);
@@ -216,10 +219,11 @@ const Index = () => {
       setWebQueryModal({ open: true, queries: data.queries });
     };
 
-    const fileGeneratedHandler = (data: { worklet: Worklet }) => {
+    const fileGeneratedHandler = (data: { worklet: WorkletPayload }) => {
+      const normalized = ensureTransformedWorklet(data.worklet);
       setWorkletsStore(prev => {
         const existing = prev[id] || [];
-        const updated = [...existing, data.worklet];
+        const updated = [...existing, normalized];
         if (threadId === id) setWorklets(updated);
         return { ...prev, [id]: updated };
       });
@@ -277,7 +281,7 @@ const Index = () => {
     const newThreadId = safeUUID();
 
     // Optimistically create a local thread representation
-    const optimisticThread = {
+    const optimisticThread: Thread = {
       thread_id: newThreadId,
       thread_name: formData.thread_name,
       custom_prompt: formData.custom_prompt,
@@ -287,7 +291,7 @@ const Index = () => {
       count: formData.count,
       generated: false,
       created_at: new Date().toISOString(),
-      worklets: [] as Worklet[],
+      worklets: [],
       local: true,
     };
 
@@ -295,7 +299,7 @@ const Index = () => {
     // Optimistically insert at top of sidebar list
     setThreads(prev => {
       const filtered = prev.filter(t => t.thread_id !== newThreadId);
-      return [optimisticThread as Thread, ...filtered];
+      return [optimisticThread, ...filtered];
     });
     setShowForm(false);
     setProgressMessages([]);
@@ -320,21 +324,20 @@ const Index = () => {
     formData.files.forEach((file: File) => body.append('files', file));
 
     try {
-      const data = await requestJson<{ worklets: Worklet[] }>(`${API_URL}/generate`, {
+      const data = await requestJson<{ worklets: WorkletPayload[] }>(`${API_URL}/generate`, {
         method: 'POST',
         body,
       });
-      setWorklets(data.worklets || []);
+  const normalizedWorklets: TransformedWorklet[] = (data.worklets || []).map(ensureTransformedWorklet);
+      setWorklets(normalizedWorklets);
       // Mark thread as generated & not local anymore so the progress bar disappears
       setSelectedThread(prev => prev ? {
         ...prev,
         local: false,
         generated: true,
-        worklets: data.worklets || prev.worklets
+        worklets: normalizedWorklets.length > 0 ? normalizedWorklets : prev.worklets
       } : prev);
-      if (data.worklets) {
-        setWorkletsStore(prev => ({ ...prev, [newThreadId]: data.worklets }));
-      }
+      setWorkletsStore(prev => ({ ...prev, [newThreadId]: normalizedWorklets }));
       // Hide progress box by marking thread as generated above; do not append more progress UI entries
       setProgressMessages([]);
       stopInitializing();
@@ -364,6 +367,45 @@ const Index = () => {
       // Close any open modals on error
       closeAllModals();
     }
+  };
+
+  const handleWorkletUpdate = (updatedWorklet: TransformedWorklet) => {
+    let nextWorklets: TransformedWorklet[] = [];
+    setWorklets((prev) => {
+      const exists = prev.some((worklet) => worklet.worklet_id === updatedWorklet.worklet_id);
+      nextWorklets = exists
+        ? prev.map((worklet) =>
+            worklet.worklet_id === updatedWorklet.worklet_id ? updatedWorklet : worklet,
+          )
+        : [...prev, updatedWorklet];
+      return nextWorklets;
+    });
+
+    const activeThreadId = selectedThread?.thread_id;
+    if (!activeThreadId) {
+      return;
+    }
+
+    if (nextWorklets.length === 0) {
+      nextWorklets = [updatedWorklet];
+    }
+
+    setWorkletsStore((prev) => ({
+      ...prev,
+      [activeThreadId]: nextWorklets,
+    }));
+
+    setSelectedThread((prev) =>
+      prev ? { ...prev, worklets: nextWorklets } : prev,
+    );
+
+    setThreads((prev) =>
+      prev.map((thread) =>
+        thread.thread_id === activeThreadId
+          ? { ...thread, worklets: nextWorklets }
+          : thread,
+      ),
+    );
   };
 
   const handleSelectThread = (id: string) => {
@@ -569,6 +611,7 @@ const Index = () => {
               <ThreadDetails
                 thread={selectedThread}
                 worklets={worklets}
+                onUpdateWorklet={handleWorkletUpdate}
               />
             </>
           )}

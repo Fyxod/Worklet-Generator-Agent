@@ -8,7 +8,75 @@ from urllib.parse import quote
 from core.models.worklet import Worklet
 from core.utils.generate_files import create_pdf, create_ppt
 from core.utils.sanitize_filename import sanitize_filename
+from core.utils.fix_dashes import fix_dashes
 from core.database import db
+from copy import deepcopy
+
+
+# Fields categorization to support normalized extraction from transformed records
+_STRING_FIELDS = {
+    "title",
+    "problem_statement",
+    "description",
+    "challenge_use_case",
+    "deliverables",
+    "infrastructure_requirements",
+    "tech_stack",
+}
+_ARRAY_FIELDS = {"kpis", "prerequisites"}
+_OBJECT_FIELDS = {"milestones"}
+
+
+def _pick_selected_value(field_payload):
+    """Given a stored field payload, return the selected iteration value.
+
+    Supports both the transformed schema (object with selected_index & iterations)
+    and the legacy/raw schema (string/list/object).
+    """
+    if isinstance(field_payload, dict) and "iterations" in field_payload:
+        iterations = field_payload.get("iterations") or []
+        if not isinstance(iterations, list) or len(iterations) == 0:
+            return None
+        idx = field_payload.get("selected_index", 0)
+        try:
+            idx = int(idx)
+        except Exception:
+            idx = 0
+        if idx < 0 or idx >= len(iterations):
+            idx = 0
+        return deepcopy(iterations[idx])
+
+    # Fallback: return the payload as-is (could be str/list/dict)
+    return deepcopy(field_payload)
+
+
+def _normalize_worklet_record(record: dict) -> dict:
+    """Convert a transformed worklet record from the DB into the plain Worklet dict.
+
+    Raises if required keys are missing; callers may catch and skip invalid entries.
+    """
+    normalized = {
+        "worklet_id": record.get("worklet_id"),
+        "references": deepcopy(record.get("references", [])),
+    }
+
+    # Strings
+    for f in _STRING_FIELDS:
+        normalized[f] = _pick_selected_value(record.get(f))
+
+    # Arrays
+    for f in _ARRAY_FIELDS:
+        val = _pick_selected_value(record.get(f))
+        # ensure we return a list for array fields
+        normalized[f] = val if isinstance(val, list) else (val or [])
+
+    # Objects
+    for f in _OBJECT_FIELDS:
+        val = _pick_selected_value(record.get(f))
+        normalized[f] = val if isinstance(val, dict) else (val or {})
+
+    return normalized
+
 
 router = APIRouter(prefix="/thread", tags=["thread"])
 
@@ -111,7 +179,9 @@ async def download_all_worklets(thread_id: str, file_type: str):
     with zipfile.ZipFile(zip_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
         for w in worklets:
             try:
-                worklet_model = Worklet(**w)
+                normalized = _normalize_worklet_record(w)
+                worklet_model = Worklet(**normalized)
+                worklet_model = fix_dashes(worklet_model)
             except Exception:
                 continue  # skip invalid
             filename_base = (
@@ -156,8 +226,17 @@ async def download_worklet(thread_id: str, worklet_id: str, file_type: str):
     if not target:
         raise HTTPException(status_code=404, detail="Worklet not found in thread")
 
-    # Validate via model
-    worklet_model = Worklet(**target)
+    # Normalize transformed record into the plain Worklet shape and validate
+    try:
+        normalized = _normalize_worklet_record(target)
+        worklet_model = Worklet(**normalized)
+        worklet_model = fix_dashes(worklet_model)
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Stored worklet is invalid or missing required fields",
+        )
     filename_base = sanitize_filename(worklet_model.title) or worklet_model.worklet_id
     if file_type == "pdf":
         data = create_pdf(

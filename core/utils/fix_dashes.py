@@ -5,6 +5,7 @@ def fix_dashes(worklet: Worklet) -> Worklet:
     worklet.title = worklet.title.replace("‑", "-")
     worklet.problem_statement = worklet.problem_statement.replace("‑", "-")
     worklet.description = worklet.description.replace("‑", "-")
+    worklet.challenge_use_case = worklet.challenge_use_case.replace("‑", "-")
     worklet.deliverables = worklet.deliverables.replace("‑", "-")
     worklet.infrastructure_requirements = worklet.infrastructure_requirements.replace(
         "‑", "-"
