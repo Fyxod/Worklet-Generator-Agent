@@ -78,7 +78,6 @@ FIELD_KEYS = {
         "problemStatement",
     ],
     "description": ["description", "Description"],
-    "reasoning": ["reasoning", "Reasoning", "llm_reasoning"],
     "challenge_use_case": [
         "challenge_use_case",
         "Challenge / Use Case",
@@ -187,11 +186,6 @@ def create_pdf(filename: str, worklet: Worklet, in_memory: bool = False):
         desc = safe_get(worklet, FIELD_KEYS["description"])
         if desc:
             elements.append(Paragraph(f"<b>Description:</b> {desc}", normal_style))
-            elements.append(Spacer(1, 6))
-
-        reasoning = safe_get(worklet, FIELD_KEYS["reasoning"])
-        if reasoning:
-            elements.append(Paragraph(f"<b>Reasoning:</b> {reasoning}", normal_style))
             elements.append(Spacer(1, 6))
 
         challenge = safe_get(worklet, FIELD_KEYS["challenge_use_case"])
@@ -393,7 +387,6 @@ def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
         for field_key in (
             "problem_statement",
             "description",
-            "reasoning",
             "challenge_use_case",
             "deliverables",
         ):
