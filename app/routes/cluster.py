@@ -70,12 +70,12 @@ async def get_cluster(cluster_id: str):
 async def create_cluster(payload: ClusterCreateRequest):
     name = _normalize_name(payload.name)
     cluster_id = _generate_cluster_id()
-    now = datetime.utcnow()
+    now = datetime.now()
     cluster_doc = {
         "cluster_id": cluster_id,
         "name": name,
         "created_at": now,
-        "updated_at": None,
+        "updated_at": now,
     }
 
     db.clusters.insert_one(cluster_doc)

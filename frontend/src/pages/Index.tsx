@@ -50,13 +50,13 @@ const Index = () => {
   // Resizable panels state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(true); // Start collapsed since no right panel content yet
-  const [layout, setLayout] = useState([20, 60, 20]); // [left, middle, right] percentages
+  const [layout, setLayout] = useState([19, 61, 20]); // [left, middle, right] percentages
   const [containerWidth, setContainerWidth] = useState(window.innerWidth);
   const containerRef = useRef<HTMLDivElement>(null);
   const leftPanelRef = useRef<any>(null);
   const middlePanelRef = useRef<any>(null);
   const rightPanelRef = useRef<any>(null);
-  const prevSidebarSizeRef = useRef<number>(20);
+  const prevSidebarSizeRef = useRef<number>(19);
   const prevRightSizeRef = useRef<number>(20);
 
   const currentThreadIdRef = useRef<string | null>(null);
@@ -114,6 +114,12 @@ const Index = () => {
     };
     window.addEventListener('resize', updateWidth);
     return () => window.removeEventListener('resize', updateWidth);
+  }, []);
+
+  useEffect(() => {
+    if (leftPanelRef.current) {
+      leftPanelRef.current.resize(19);
+    }
   }, []);
 
   // Calculate collapsed width in percent

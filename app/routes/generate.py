@@ -76,6 +76,10 @@ async def generate(
         custom_prompt=custom_prompt,
     )
     db.threads.insert_one(thread_dict)
+    db.clusters.update_one(
+        {"cluster_id": cluster_id},
+        {"$set": {"updated_at": datetime.now()}},
+    )
 
     start_time = time.time()
     state = await Pipeline.ainvoke(state)

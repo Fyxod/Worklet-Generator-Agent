@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Pencil, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
@@ -20,6 +21,7 @@ const ClustersPage = () => {
   const { theme, toggleTheme } = useTheme();
 
   const [clusters, setClusters] = useState<Cluster[]>([]);
+  const [sortOption, setSortOption] = useState<'created' | 'updated' | 'alphabetical'>('created');
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
@@ -31,6 +33,18 @@ const ClustersPage = () => {
 
   useEffect(() => {
     fetchClusters();
+  }, []);
+
+  // Persist sort preference
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem('clusters:sort');
+      if (saved === 'created' || saved === 'updated' || saved === 'alphabetical') {
+        setSortOption(saved);
+      }
+    } catch {
+      // ignore
+    }
   }, []);
 
   useEffect(() => {
@@ -56,6 +70,26 @@ const ClustersPage = () => {
       setLoading(false);
     }
   };
+
+  const sortedClusters = useMemo(() => {
+    const copy = [...clusters];
+    if (sortOption === 'alphabetical') {
+      return copy.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    }
+    if (sortOption === 'updated') {
+      return copy.sort((a, b) => {
+        const aTime = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+        const bTime = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+        return bTime - aTime; // most recently updated first
+      });
+    }
+    // default: created (most recent first)
+    return copy.sort((a, b) => {
+      const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return bTime - aTime;
+    });
+  }, [clusters, sortOption]);
 
   const handleStartCreating = () => {
     setCreating(true);
@@ -134,6 +168,8 @@ const ClustersPage = () => {
     }
   };
 
+  const location = useLocation();
+
   const handleDeleteCluster = async (clusterId: string) => {
     setBusyId(clusterId);
     try {
@@ -141,6 +177,13 @@ const ClustersPage = () => {
       setClusters((prev) => prev.filter((cluster) => cluster.cluster_id !== clusterId));
       toast.success('Cluster deleted');
       if (confirmDeleteId === clusterId) setConfirmDeleteId(null);
+
+      // If the user is currently viewing the deleted cluster, navigate back to the root
+      // This avoids showing stale/404 cluster pages after deletion.
+      const path = location.pathname || '';
+      if (path.startsWith(`/cluster/${clusterId}`) || path === `/cluster/${clusterId}`) {
+        navigate('/');
+      }
     } catch (error) {
       console.error('Error deleting cluster:', error);
       const message = error instanceof ApiError ? error.message : 'Failed to delete cluster';
@@ -156,7 +199,7 @@ const ClustersPage = () => {
         <div className="max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-foreground">{PROJECT_NAME}</h1>
-            <p className="text-muted-foreground mt-1">Choose or create a cluster to start working with threads.</p>
+            <p className="text-muted-foreground mt-1">Choose or create a cluster to start creating worklets.</p>
           </div>
           <div className="flex items-center gap-3">
             <TooltipProvider>
@@ -175,6 +218,24 @@ const ClustersPage = () => {
                 <TooltipContent>Add a new cluster</TooltipContent>
               </Tooltip>
             </TooltipProvider>
+            {/* Sort dropdown (styled) */}
+            <div className="ml-2">
+              <label className="sr-only">Sort clusters</label>
+              <Select value={sortOption} onValueChange={(v) => {
+                const val = v as 'created' | 'updated' | 'alphabetical';
+                setSortOption(val);
+                try { window.localStorage.setItem('clusters:sort', val); } catch { }
+              }}>
+                <SelectTrigger className="w-56 sm:w-44 md:w-56">
+                  <SelectValue placeholder="Sort clusters" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="alphabetical">Alphabetical (A–Z)</SelectItem>
+                  <SelectItem value="created">Date created (newest)</SelectItem>
+                  <SelectItem value="updated">Last updated (newest)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <Button
               variant="ghost"
               size="icon"
@@ -251,18 +312,40 @@ const ClustersPage = () => {
             </Card>
           )}
 
-          {clusters.map((cluster) => {
+          {sortedClusters.map((cluster) => {
             const isEditing = editingId === cluster.cluster_id;
+            const handleOpenCluster = () => {
+              // If any delete confirmation is open, don't navigate — clicking outside the
+              // dialog should dismiss it, not cause navigation into the card below.
+              if (isEditing || confirmDeleteId) return;
+              navigate(`/cluster/${cluster.cluster_id}`);
+            };
+            const handleKeyActivate = (event: KeyboardEvent<HTMLDivElement>) => {
+              if (isEditing || confirmDeleteId || event.target !== event.currentTarget) return;
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                handleOpenCluster();
+              }
+            };
+
             return (
               <Card
                 key={cluster.cluster_id}
-                className="relative h-80 w-60 mx-auto flex flex-col items-center justify-center border-border bg-card hover:border-primary transition-smooth"
+                role={isEditing ? undefined : 'button'}
+                tabIndex={isEditing ? -1 : 0}
+                onClick={handleOpenCluster}
+                onKeyDown={handleKeyActivate}
+                // Ensure the card hides overflow and allows inner flex children to constrain height
+                className={`relative h-80 w-60 mx-auto flex flex-col items-center justify-center border-border bg-card transition-smooth focus:outline-none focus:ring-2 focus:ring-primary/50 overflow-hidden ${isEditing ? '' : 'hover:border-primary cursor-pointer'}`}
               >
                 <div className="absolute top-3 right-3 flex items-center gap-2">
                   <button
                     type="button"
                     className="rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-smooth"
-                    onClick={() => handleRenameClick(cluster)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleRenameClick(cluster);
+                    }}
                     aria-label="Rename cluster"
                   >
                     <Pencil className="h-4 w-4" />
@@ -272,7 +355,10 @@ const ClustersPage = () => {
                       <button
                         type="button"
                         className="rounded-full p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-smooth"
-                        onClick={() => setConfirmDeleteId(cluster.cluster_id)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setConfirmDeleteId(cluster.cluster_id);
+                        }}
                         aria-label="Delete cluster"
                       >
                         <X className="h-4 w-4" />
@@ -289,7 +375,12 @@ const ClustersPage = () => {
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction
                           className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          onClick={() => handleDeleteCluster(cluster.cluster_id)}
+                          onClick={(e: React.MouseEvent) => {
+                            // Prevent this click from bubbling to the underlying card which
+                            // would trigger navigation to the cluster page.
+                            e.stopPropagation();
+                            handleDeleteCluster(cluster.cluster_id);
+                          }}
                           disabled={busyId === cluster.cluster_id}
                         >
                           Delete
@@ -300,7 +391,11 @@ const ClustersPage = () => {
                 </div>
 
                 {isEditing ? (
-                  <form onSubmit={handleRenameSubmit} className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center w-full">
+                  <form
+                    onSubmit={handleRenameSubmit}
+                    onClick={(event) => event.stopPropagation()}
+                    className="flex flex-1 min-h-0 flex-col items-center justify-center gap-4 px-6 text-center w-full"
+                  >
                     <Input
                       ref={inputRef}
                       value={editingName}
@@ -314,13 +409,14 @@ const ClustersPage = () => {
                     </div>
                   </form>
                 ) : (
-                  <button
-                    type="button"
-                    className="flex-1 flex flex-col items-center justify-center px-6 text-center"
-                    onClick={() => navigate(`/cluster/${cluster.cluster_id}`)}
-                  >
-                    <h2 className="text-xl font-semibold text-foreground break-words">{cluster.name}</h2>
-                  </button>
+                  // The outer flex child must allow its children to shrink (min-h-0) so the inner
+                  // scroll container can constrain its height. The scroll container then uses
+                  // overflow-y-auto to keep long names inside the card.
+                  <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-6 text-center w-full">
+                    <div className="min-h-0 max-h-full w-full overflow-y-auto">
+                      <h2 className="text-xl font-semibold text-foreground break-words whitespace-pre-wrap leading-snug">{cluster.name}</h2>
+                    </div>
+                  </div>
                 )}
               </Card>
             );
