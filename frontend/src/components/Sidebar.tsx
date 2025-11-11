@@ -84,7 +84,7 @@ export const Sidebar = ({ threads, onNewThread, onSelectThread, selectedThreadId
                   <button
                     onClick={() => onSelectThread(thread.thread_id)}
                     aria-current={isSelected ? 'true' : undefined}
-                    className={`w-full text-left p-3 rounded-lg transition-smooth focus:outline-none focus:ring-2 focus:ring-sidebar-ring ${!collapsed ? 'pr-10' : ''} ${
+                    className={`w-full text-left p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-sidebar-ring ${!collapsed ? 'pr-10' : ''} ${
                       isSelected
                         ? 'bg-sidebar-accent text-sidebar-accent-foreground font-semibold ring-1 ring-sidebar-ring border-l-4 border-sidebar-primary shadow-glow'
                         : 'hover:bg-sidebar-accent/20'
