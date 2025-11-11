@@ -9,16 +9,21 @@ import { WebQueryModal } from '@/components/WebQueryModal';
 import { ThreadDetails } from '@/components/ThreadDetails';
 import { Thread, DomainsKeywords, ProgressMessage, TransformedWorklet, ThreadApiResponse, WorkletPayload } from '@/types/thread';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { getSocket } from '@/lib/socket';
 import { toast } from 'sonner';
 import { API_URL } from '@/config';
 import { ApiError, requestJson, formatValidationDetails } from '@/lib/http';
 import { normalizeThreadResponse, ensureTransformedWorklet } from '@/lib/worklet';
+import { useTheme } from '@/contexts/ThemeContext';
+import { Sun, Moon } from 'lucide-react';
 
 const Index = () => {
   const navigate = useNavigate();
   const { threadId } = useParams();
   const location = useLocation();
+  const { theme, toggleTheme } = useTheme();
 
   const [threads, setThreads] = useState<Thread[]>([]);
   const [selectedThread, setSelectedThread] = useState<Thread | null>(null);
@@ -43,17 +48,19 @@ const Index = () => {
     open: boolean;
     data: DomainsKeywords | null;
     message?: string;
-  }>({ open: false, data: null });
+    threadId?: string;
+  }>({ open: false, data: null, threadId: undefined });
 
   const [webQueryModal, setWebQueryModal] = useState<{
     open: boolean;
     queries: string[];
-  }>({ open: false, queries: [] });
+    threadId?: string;
+  }>({ open: false, queries: [], threadId: undefined });
 
   // Helper to close any approval modals that might be open
   const closeAllModals = () => {
-    setDomainKeywordModal({ open: false, data: null, message: undefined });
-    setWebQueryModal({ open: false, queries: [] });
+  setDomainKeywordModal({ open: false, data: null, message: undefined, threadId: undefined });
+  setWebQueryModal({ open: false, queries: [], threadId: undefined });
   };
 
   useEffect(() => {
@@ -211,12 +218,12 @@ const Index = () => {
 
     const topicApprovalHandler = (data: DomainsKeywords & { message?: string }) => {
       console.log('Received topic approval request:', data);
-      setDomainKeywordModal({ open: true, data, message: data.message });
+  setDomainKeywordModal({ open: true, data, message: data.message, threadId: id });
     };
 
     const webApprovalHandler = (data: { queries: string[] }) => {
       console.log('Received web approval request:', data);
-      setWebQueryModal({ open: true, queries: data.queries });
+      setWebQueryModal({ open: true, queries: data.queries, threadId: id });
     };
 
     const fileGeneratedHandler = (data: { worklet: WorkletPayload }) => {
@@ -278,7 +285,7 @@ const Index = () => {
   const handleGenerate = async (formData: any) => {
     // Preserve form data in case of failure
     const previousFormData = { ...formData };
-    const newThreadId = safeUUID();
+    const newThreadId = safeUUID().replace(/-/g, '').slice(0, 6);
 
     // Optimistically create a local thread representation
     const optimisticThread: Thread = {
@@ -466,7 +473,11 @@ const Index = () => {
   };
 
   const handleDomainKeywordSubmit = (data: DomainsKeywords) => {
-    if (!threadId) return;
+    const targetThreadId = domainKeywordModal.threadId ?? threadId;
+    if (!targetThreadId) {
+      console.warn('Unable to emit topic response: missing target thread id');
+      return;
+    }
 
     const socket = getSocket();
     // Sanitize payload: remove empty/whitespace-only strings & trim duplicates (case-insensitive) preserving first occurrence
@@ -498,12 +509,16 @@ const Index = () => {
         custom: sanitize(data.keywords.custom),
       },
     };
-    socket.emit(`${threadId}/topic_response`, sanitized);
-    setDomainKeywordModal({ open: false, data: null, message: undefined });
+    socket.emit(`${targetThreadId}/topic_response`, sanitized);
+    setDomainKeywordModal({ open: false, data: null, message: undefined, threadId: undefined });
   };
 
   const handleWebQuerySubmit = (queries: string[]) => {
-    if (!threadId) return;
+    const targetThreadId = webQueryModal.threadId ?? threadId;
+    if (!targetThreadId) {
+      console.warn('Unable to emit web response: missing target thread id');
+      return;
+    }
 
     const socket = getSocket();
     // Normalize queries more aggressively to avoid duplicates that differ only by
@@ -527,8 +542,8 @@ const Index = () => {
         seen.add(key);
         return true;
       });
-    socket.emit(`${threadId}/web_response`, { queries: cleaned });
-    setWebQueryModal({ open: false, queries: [] });
+    socket.emit(`${targetThreadId}/web_response`, { queries: cleaned });
+    setWebQueryModal({ open: false, queries: [], threadId: undefined });
   };
 
   useEffect(() => {
@@ -561,6 +576,10 @@ const Index = () => {
     };
   }, []);
 
+  const modalThreadName = domainKeywordModal.threadId
+    ? threads.find(t => t.thread_id === domainKeywordModal.threadId)?.thread_name
+    : selectedThread?.thread_name;
+
   return (
     <div className="flex h-screen w-full bg-background">
       <Sidebar
@@ -573,16 +592,33 @@ const Index = () => {
 
       <main className="flex-1 overflow-auto">
         <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-          <div className="p-6">
+          <div className="p-6 flex items-center justify-between">
             <button
               type="button"
               onClick={handleHeaderClick}
               className="text-left focus:outline-none"
             >
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              <h1 className="text-3xl font-bold text-foreground">
                 Worklet Generator Agent
               </h1>
             </button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={toggleTheme}
+                    className="ml-4"
+                  >
+                    {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Switch to {theme === 'dark' ? 'light' : 'dark'} mode
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </header>
 
@@ -622,7 +658,7 @@ const Index = () => {
         <DomainKeywordModal
           open={domainKeywordModal.open}
           data={domainKeywordModal.data}
-          threadName={selectedThread?.thread_name}
+          threadName={modalThreadName}
           message={domainKeywordModal.message}
           onSubmit={handleDomainKeywordSubmit}
         />

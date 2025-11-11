@@ -12,7 +12,7 @@ export const WelcomeScreen = ({ onStartGenerating }: WelcomeScreenProps) => {
         <div className="inline-flex items-center justify-center w-20 h-20 rounded-full gradient-primary shadow-glow mb-4">
           <Sparkles className="h-10 w-10 text-primary-foreground" />
         </div>
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+        <h1 className="text-4xl font-bold text-primary">
           Welcome to Worklet Generator Agent
         </h1>
         <p className="text-muted-foreground text-lg max-w-md mx-auto">

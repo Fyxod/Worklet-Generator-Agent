@@ -27,7 +27,7 @@ const NotFound = () => {
       {/* Subtle background decoration */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(45rem_30rem_at_50%_-10%,hsl(var(--primary)/0.08),transparent)] dark:bg-[radial-gradient(45rem_30rem_at_50%_-10%,hsl(var(--primary)/0.12),transparent)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(45rem_30rem_at_50%_-10%,hsl(var(--primary)/0.08),transparent)]"
       />
 
       <Card className="relative mx-4 w-full max-w-xl border-muted/50 shadow-lg">

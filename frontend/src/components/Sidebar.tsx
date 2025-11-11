@@ -58,7 +58,6 @@ export const Sidebar = ({ threads, onNewThread, onSelectThread, selectedThreadId
             variant="ghost"
             size="icon"
             onClick={() => setCollapsed(!collapsed)}
-            className="ml-auto"
           >
             {collapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
           </Button>
