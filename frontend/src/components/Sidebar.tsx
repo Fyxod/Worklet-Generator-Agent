@@ -79,18 +79,20 @@ export const Sidebar = ({ threads, onNewThread, onSelectThread, selectedThreadId
           <div className="space-y-2 p-4">
             <TooltipProvider>
               {threads.map((thread) => {
+                const isSelected = selectedThreadId === thread.thread_id;
                 const threadButton = (
                   <button
                     onClick={() => onSelectThread(thread.thread_id)}
-                    className={`w-full text-left p-3 rounded-lg transition-smooth pr-10 ${
-                      selectedThreadId === thread.thread_id
-                        ? 'bg-sidebar-accent shadow-glow'
-                        : 'hover:bg-sidebar-accent/50'
+                    aria-current={isSelected ? 'true' : undefined}
+                    className={`w-full text-left p-3 rounded-lg transition-smooth focus:outline-none focus:ring-2 focus:ring-sidebar-ring ${!collapsed ? 'pr-10' : ''} ${
+                      isSelected
+                        ? 'bg-sidebar-accent text-sidebar-accent-foreground font-semibold ring-1 ring-sidebar-ring border-l-4 border-sidebar-primary shadow-glow'
+                        : 'hover:bg-sidebar-accent/20'
                     }`}
                   >
                     {!collapsed ? (
                       <>
-                        <div className="font-medium whitespace-normal break-words mb-1 pr-8 text-sidebar-foreground">
+                        <div className={`whitespace-normal break-words mb-1 pr-8 ${isSelected ? 'text-sidebar-accent-foreground font-semibold' : 'font-medium text-sidebar-foreground'}`}>
                           {thread.thread_name}
                         </div>
                         <div className="text-xs text-muted-foreground mt-1">
@@ -114,22 +116,24 @@ export const Sidebar = ({ threads, onNewThread, onSelectThread, selectedThreadId
                     ) : (
                       threadButton
                     )}
-                    {/* Delete button - always visible, positioned at edge */}
-                    <AlertDialog open={pendingDelete === thread.thread_id} onOpenChange={(open) => {
-                      if (open) openConfirm(thread.thread_id); else if (pendingDelete === thread.thread_id) closeConfirm();
-                    }}>
+                    {/* Delete button - only visible when not collapsed */}
+                    {!collapsed && (
+                      <AlertDialog open={pendingDelete === thread.thread_id} onOpenChange={(open) => {
+                        if (open) openConfirm(thread.thread_id); else if (pendingDelete === thread.thread_id) closeConfirm();
+                      }}>
                       <AlertDialogTrigger asChild>
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); openConfirm(thread.thread_id); }}
-                          className={`absolute top-1.5 right-1 p-1 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-smooth ${
-                            collapsed ? 'h-6 w-6' : 'h-8 w-8'
+                          className={`absolute top-2 right-3 inline-flex items-center justify-center rounded-md transition-smooth text-muted-foreground hover:text-destructive ${
+                            collapsed ? 'w-5 h-5' : 'w-6 h-6'
                           }`}
                           aria-label="Delete thread"
                         >
-                          <X className={`${
-                            collapsed ? 'h-3 w-3' : 'h-4 w-4'
-                          }`} />
+                          {/* no extra padding so hover bg is symmetric; use inline-flex to center icon */}
+                          <span className="flex items-center justify-center w-full h-full rounded-md hover:bg-destructive/20">
+                            <X className={`${collapsed ? 'h-3 w-3' : 'h-4 w-4'}`} />
+                          </span>
                         </button>
                       </AlertDialogTrigger>
                         <AlertDialogContent>
@@ -145,6 +149,7 @@ export const Sidebar = ({ threads, onNewThread, onSelectThread, selectedThreadId
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
+                    )}
                   </div>
                 );
               })}

@@ -649,7 +649,7 @@ const Index = () => {
         <ResizablePanel
           ref={leftPanelRef}
           defaultSize={layout[0]}
-          minSize={sidebarCollapsed ? collapsedPercent : 18}
+          minSize={sidebarCollapsed ? collapsedPercent : 19}
           maxSize={sidebarCollapsed ? collapsedPercent : 40}
         >
           <Sidebar
