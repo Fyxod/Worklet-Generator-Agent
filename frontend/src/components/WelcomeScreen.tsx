@@ -1,5 +1,6 @@
 import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PROJECT_NAME } from '../../config';
 
 interface WelcomeScreenProps {
   onStartGenerating: () => void;
@@ -13,7 +14,7 @@ export const WelcomeScreen = ({ onStartGenerating }: WelcomeScreenProps) => {
           <Sparkles className="h-10 w-10 text-primary-foreground" />
         </div>
         <h1 className="text-4xl font-bold text-primary">
-          Welcome to Worklet Generator Agent
+          {`Welcome to ${PROJECT_NAME}`}
         </h1>
         <p className="text-muted-foreground text-lg max-w-md mx-auto">
           Create powerful worklets with AI assistance. Upload files, add links, and let our agent do the magic.

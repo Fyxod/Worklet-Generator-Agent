@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Thread } from '@/types/thread';
@@ -24,10 +24,11 @@ interface SidebarProps {
   onSelectThread: (threadId: string) => void;
   selectedThreadId: string | null;
   onDeleteThread: (threadId: string) => Promise<void> | void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
-export const Sidebar = ({ threads, onNewThread, onSelectThread, selectedThreadId, onDeleteThread }: SidebarProps) => {
-  const [collapsed, setCollapsed] = useState(false);
+export const Sidebar = ({ threads, onNewThread, onSelectThread, selectedThreadId, onDeleteThread, collapsed = false, onToggleCollapse }: SidebarProps) => {
   const [pendingDelete, setPendingDelete] = useReactState<string | null>(null);
 
   const openConfirm = useCallback((id: string) => {
@@ -44,9 +45,7 @@ export const Sidebar = ({ threads, onNewThread, onSelectThread, selectedThreadId
 
   return (
     <div
-      className={`h-screen bg-sidebar border-r border-sidebar-border transition-smooth ${
-        collapsed ? 'w-16' : 'w-72'
-      }`}
+      className={`h-screen bg-sidebar border-r border-sidebar-border transition-smooth`}
     >
       <div className="flex flex-col h-full">
         {/* Header */}
@@ -57,7 +56,7 @@ export const Sidebar = ({ threads, onNewThread, onSelectThread, selectedThreadId
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setCollapsed(!collapsed)}
+            onClick={onToggleCollapse}
           >
             {collapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
           </Button>
@@ -83,15 +82,15 @@ export const Sidebar = ({ threads, onNewThread, onSelectThread, selectedThreadId
                 const threadButton = (
                   <button
                     onClick={() => onSelectThread(thread.thread_id)}
-                    className={`w-full text-left p-3 rounded-lg transition-smooth ${!collapsed ? 'pr-10' : ''} ${
+                    className={`w-full text-left p-3 rounded-lg transition-smooth pr-10 ${
                       selectedThreadId === thread.thread_id
                         ? 'bg-sidebar-accent shadow-glow'
                         : 'hover:bg-sidebar-accent/50'
-                    } ${collapsed ? 'px-2 pr-2' : ''}`}
+                    }`}
                   >
                     {!collapsed ? (
                       <>
-                        <div className="font-medium text-sidebar-foreground truncate">
+                        <div className="font-medium whitespace-normal break-words mb-1 pr-8 text-sidebar-foreground">
                           {thread.thread_name}
                         </div>
                         <div className="text-xs text-muted-foreground mt-1">
@@ -106,7 +105,7 @@ export const Sidebar = ({ threads, onNewThread, onSelectThread, selectedThreadId
                   </button>
                 );
                 return (
-                  <div key={thread.thread_id} className="relative group">
+                  <div key={thread.thread_id} className="relative group min-w-0">
                     {collapsed ? (
                       <Tooltip>
                         <TooltipTrigger asChild>{threadButton}</TooltipTrigger>
@@ -115,21 +114,24 @@ export const Sidebar = ({ threads, onNewThread, onSelectThread, selectedThreadId
                     ) : (
                       threadButton
                     )}
-                    {/* Delete button (only when expanded) */}
-                    {!collapsed && (
-                      <AlertDialog open={pendingDelete === thread.thread_id} onOpenChange={(open) => {
-                        if (open) openConfirm(thread.thread_id); else if (pendingDelete === thread.thread_id) closeConfirm();
-                      }}>
-                        <AlertDialogTrigger asChild>
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); openConfirm(thread.thread_id); }}
-                            className="absolute top-1.5 right-2 p-1 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-smooth"
-                            aria-label="Delete thread"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </AlertDialogTrigger>
+                    {/* Delete button - always visible, positioned at edge */}
+                    <AlertDialog open={pendingDelete === thread.thread_id} onOpenChange={(open) => {
+                      if (open) openConfirm(thread.thread_id); else if (pendingDelete === thread.thread_id) closeConfirm();
+                    }}>
+                      <AlertDialogTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); openConfirm(thread.thread_id); }}
+                          className={`absolute top-1.5 right-1 p-1 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-smooth ${
+                            collapsed ? 'h-6 w-6' : 'h-8 w-8'
+                          }`}
+                          aria-label="Delete thread"
+                        >
+                          <X className={`${
+                            collapsed ? 'h-3 w-3' : 'h-4 w-4'
+                          }`} />
+                        </button>
+                      </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
                             <AlertDialogTitle>Delete Thread</AlertDialogTitle>
@@ -143,7 +145,6 @@ export const Sidebar = ({ threads, onNewThread, onSelectThread, selectedThreadId
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
-                    )}
                   </div>
                 );
               })}

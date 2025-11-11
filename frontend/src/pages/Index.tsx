@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Sidebar } from '@/components/Sidebar';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
@@ -7,13 +7,14 @@ import { ProgressBar } from '@/components/ProgressBar';
 import { DomainKeywordModal } from '@/components/DomainKeywordModal';
 import { WebQueryModal } from '@/components/WebQueryModal';
 import { ThreadDetails } from '@/components/ThreadDetails';
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/resizable';
 import { Thread, DomainsKeywords, ProgressMessage, TransformedWorklet, ThreadApiResponse, WorkletPayload } from '@/types/thread';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { getSocket } from '@/lib/socket';
 import { toast } from 'sonner';
-import { API_URL } from '@/config';
+import { API_URL, PROJECT_NAME } from '../../config';
 import { ApiError, requestJson, formatValidationDetails } from '@/lib/http';
 import { normalizeThreadResponse, ensureTransformedWorklet } from '@/lib/worklet';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -41,6 +42,17 @@ const Index = () => {
   // Keep track of current socket event bindings for cleanup
   const socketCleanupRef = useRef<() => void>(() => { });
 
+  // Resizable panels state
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(true); // Start collapsed since no right panel content yet
+  const [layout, setLayout] = useState([20, 60, 20]); // [left, middle, right] percentages
+  const [containerWidth, setContainerWidth] = useState(window.innerWidth);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const leftPanelRef = useRef<any>(null);
+  const middlePanelRef = useRef<any>(null);
+  const rightPanelRef = useRef<any>(null);
+  const prevSidebarSizeRef = useRef<number>(20);
+  const prevRightSizeRef = useRef<number>(20);
 
   const currentThreadIdRef = useRef<string | null>(null);
 
@@ -66,6 +78,57 @@ const Index = () => {
   useEffect(() => {
     fetchThreads();
   }, []);
+
+  // Update container width on resize
+  useEffect(() => {
+    const updateWidth = () => {
+      setContainerWidth(window.innerWidth);
+    };
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
+
+  // Calculate collapsed width in percent
+  const collapsedPercent = useMemo(() => {
+    const width = containerWidth;
+    const collapsedPx = 64;
+    const percent = (collapsedPx / Math.max(1, width)) * 100;
+    return Math.max(2, Math.min(20, percent));
+  }, [containerWidth]);
+
+  // Toggle sidebar collapse
+  const toggleSidebar = () => {
+    if (sidebarCollapsed) {
+      // Expand
+      leftPanelRef.current?.resize(prevSidebarSizeRef.current);
+      setSidebarCollapsed(false);
+    } else {
+      // Collapse
+      prevSidebarSizeRef.current = layout[0];
+      leftPanelRef.current?.resize(collapsedPercent);
+      setSidebarCollapsed(true);
+    }
+  };
+
+  // Toggle right panel collapse
+  const toggleRightPanel = () => {
+    if (rightPanelCollapsed) {
+      // Expand
+      rightPanelRef.current?.resize(prevRightSizeRef.current);
+      setRightPanelCollapsed(false);
+    } else {
+      // Collapse
+      prevRightSizeRef.current = layout[2];
+      rightPanelRef.current?.resize(collapsedPercent);
+      setRightPanelCollapsed(true);
+    }
+  };
+
+  // Handle layout changes
+  const handleLayout = (sizes: number[]) => {
+    setLayout(sizes);
+    localStorage.setItem('dashboard:sidebar:layout', JSON.stringify(sizes));
+  };
 
   useEffect(() => {
     if (!threadId) return;
@@ -581,16 +644,31 @@ const Index = () => {
     : selectedThread?.thread_name;
 
   return (
-    <div className="flex h-screen w-full bg-background">
-      <Sidebar
-        threads={threads}
-        onNewThread={handleNewThread}
-        onSelectThread={handleSelectThread}
-        selectedThreadId={threadId || null}
-        onDeleteThread={handleDeleteThread}
-      />
-
-      <main className="flex-1 overflow-auto">
+    <div ref={containerRef} className="h-screen w-full bg-background">
+      <ResizablePanelGroup direction="horizontal" onLayout={handleLayout}>
+        <ResizablePanel
+          ref={leftPanelRef}
+          defaultSize={layout[0]}
+          minSize={sidebarCollapsed ? collapsedPercent : 18}
+          maxSize={sidebarCollapsed ? collapsedPercent : 40}
+        >
+          <Sidebar
+            threads={threads}
+            onNewThread={handleNewThread}
+            onSelectThread={handleSelectThread}
+            selectedThreadId={threadId || null}
+            onDeleteThread={handleDeleteThread}
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={toggleSidebar}
+          />
+        </ResizablePanel>
+        <ResizableHandle withHandle={!sidebarCollapsed} />
+        <ResizablePanel
+          ref={middlePanelRef}
+          defaultSize={layout[1]}
+          minSize={40}
+        >
+          <main className="h-full overflow-auto">
         <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
           <div className="p-6 flex items-center justify-between">
             <button
@@ -598,8 +676,8 @@ const Index = () => {
               onClick={handleHeaderClick}
               className="text-left focus:outline-none"
             >
-              <h1 className="text-3xl font-bold text-foreground">
-                Worklet Generator Agent
+                <h1 className="text-3xl font-bold text-foreground">
+                {PROJECT_NAME}
               </h1>
             </button>
             <TooltipProvider>
@@ -651,8 +729,22 @@ const Index = () => {
               />
             </>
           )}
-        </div>
-      </main>
+            </div>
+          </main>
+        </ResizablePanel>
+        <ResizableHandle withHandle={!rightPanelCollapsed} />
+        <ResizablePanel
+          ref={rightPanelRef}
+          defaultSize={layout[2]}
+          minSize={rightPanelCollapsed ? collapsedPercent : 12}
+          maxSize={rightPanelCollapsed ? collapsedPercent : 40}
+        >
+          {/* Right panel content - placeholder for now */}
+          <div className="h-full bg-muted/50 border-l border-border">
+            {/* Right sidebar content would go here */}
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
 
       {domainKeywordModal.data && (
         <DomainKeywordModal

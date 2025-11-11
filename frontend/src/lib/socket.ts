@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client';
-import { API_URL   } from '@/config';
+import { API_URL } from '../../config';
 const SOCKET_URL = API_URL.replace(/^http/, 'ws');
 
 let socket: Socket | null = null;
