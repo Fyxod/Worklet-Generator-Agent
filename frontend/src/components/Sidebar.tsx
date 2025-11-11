@@ -26,9 +26,10 @@ interface SidebarProps {
   onDeleteThread: (threadId: string) => Promise<void> | void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  clusterName?: string;
 }
 
-export const Sidebar = ({ threads, onNewThread, onSelectThread, selectedThreadId, onDeleteThread, collapsed = false, onToggleCollapse }: SidebarProps) => {
+export const Sidebar = ({ threads, onNewThread, onSelectThread, selectedThreadId, onDeleteThread, collapsed = false, onToggleCollapse, clusterName }: SidebarProps) => {
   const [pendingDelete, setPendingDelete] = useReactState<string | null>(null);
 
   const openConfirm = useCallback((id: string) => {
@@ -51,7 +52,12 @@ export const Sidebar = ({ threads, onNewThread, onSelectThread, selectedThreadId
         {/* Header */}
         <div className="p-4 border-b border-sidebar-border flex items-center justify-between">
           {!collapsed && (
-            <h2 className="text-lg font-semibold text-sidebar-foreground">Threads</h2>
+            <div className="flex flex-col">
+              <h2 className="text-lg font-semibold text-sidebar-foreground">Threads</h2>
+              {clusterName && (
+                <span className="text-xs text-muted-foreground mt-1 truncate max-w-[12rem]">{clusterName}</span>
+              )}
+            </div>
           )}
           <Button
             variant="ghost"

@@ -15,9 +15,10 @@ interface ThreadFormProps {
     files: File[];
     count: number;
   }) => void;
+  clusterName?: string;
 }
 
-export const ThreadForm = ({ onGenerate }: ThreadFormProps) => {
+export const ThreadForm = ({ onGenerate, clusterName }: ThreadFormProps) => {
   const location = useLocation();
   const state = (location.state as any) || {};
   const previous = state.previousFormData || {};
@@ -26,7 +27,7 @@ export const ThreadForm = ({ onGenerate }: ThreadFormProps) => {
   const [customPrompt, setCustomPrompt] = useState(previous.custom_prompt || '');
   const [links, setLinks] = useState<string[]>(previous.links && previous.links.length ? previous.links : ['']);
   const [files, setFiles] = useState<File[]>(previous.files || []);
-  const [count, setCount] = useState(previous.count || 5);
+  const [count, setCount] = useState(previous.count || 3);
 
   // Clear location state after hydrating to avoid stale refills on subsequent navigations
   useEffect(() => {
@@ -75,6 +76,11 @@ export const ThreadForm = ({ onGenerate }: ThreadFormProps) => {
   return (
     <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl mx-auto p-6">
       <Card className="p-6 bg-card border-border space-y-6">
+        {clusterName && (
+          <div className="rounded-md border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+            Creating a thread in <span className="font-semibold text-foreground">{clusterName}</span>
+          </div>
+        )}
         {/* Thread Name */}
         <div className="space-y-2">
           <Label htmlFor="thread_name" className="text-foreground">Thread Name</Label>

@@ -9,6 +9,7 @@ import { WebQueryModal } from '@/components/WebQueryModal';
 import { ThreadDetails } from '@/components/ThreadDetails';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/resizable';
 import { Thread, DomainsKeywords, ProgressMessage, TransformedWorklet, ThreadApiResponse, WorkletPayload } from '@/types/thread';
+import { Cluster } from '@/types/cluster';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -18,12 +19,13 @@ import { API_URL, PROJECT_NAME } from '../../config';
 import { ApiError, requestJson, formatValidationDetails } from '@/lib/http';
 import { normalizeThreadResponse, ensureTransformedWorklet } from '@/lib/worklet';
 import { useTheme } from '@/contexts/ThemeContext';
-import { Sun, Moon } from 'lucide-react';
+import { Sun, Moon, ArrowLeft } from 'lucide-react';
 
 const Index = () => {
   const navigate = useNavigate();
-  const { threadId } = useParams();
+  const { clusterId, threadId } = useParams<{ clusterId?: string; threadId?: string }>();
   const location = useLocation();
+  const isNewRoute = location.pathname.endsWith('/new');
   const { theme, toggleTheme } = useTheme();
 
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -32,6 +34,9 @@ const Index = () => {
   const [showForm, setShowForm] = useState(false);
   const [progressMessages, setProgressMessages] = useState<ProgressMessage[]>([]);
   const [worklets, setWorklets] = useState<TransformedWorklet[]>([]);
+  const [clusterName, setClusterName] = useState<string>('');
+  const [clusterLoading, setClusterLoading] = useState<boolean>(true);
+  const [clusterError, setClusterError] = useState<string | null>(null);
   // Initialization placeholder state for brand-new thread creation
   const [isInitializing, setIsInitializing] = useState<boolean>(false);
   const isInitializingRef = useRef<boolean>(false);
@@ -76,8 +81,31 @@ const Index = () => {
   };
 
   useEffect(() => {
-    fetchThreads();
-  }, []);
+    if (!clusterId) {
+      setClusterLoading(false);
+      setClusterError('Cluster not specified.');
+      setThreads([]);
+      setSelectedThread(null);
+      return;
+    }
+    setThreads([]);
+    setSelectedThread(null);
+    setProgressMessages([]);
+    setWorklets([]);
+  setProgressStore({});
+  setWorkletsStore({});
+    socketCleanupRef.current?.();
+    stopInitializing();
+    closeAllModals();
+    fetchCluster(clusterId);
+  }, [clusterId]);
+
+  useEffect(() => {
+    if (!clusterId || clusterError) {
+      return;
+    }
+    fetchThreads(clusterId);
+  }, [clusterId, clusterError]);
 
   // Update container width on resize
   useEffect(() => {
@@ -131,13 +159,13 @@ const Index = () => {
   };
 
   useEffect(() => {
-    if (!threadId) return;
+    if (!threadId || !clusterId || clusterError) return;
     // If we already have a selectedThread that matches and is local optimistic, skip fetching
     if (selectedThread && selectedThread.thread_id === threadId && selectedThread.local) {
       return;
     }
     fetchThread(threadId);
-  }, [threadId]);
+  }, [threadId, clusterId, clusterError]);
 
   useEffect(() => {
     currentThreadIdRef.current = threadId || null;
@@ -145,20 +173,45 @@ const Index = () => {
 
 
   useEffect(() => {
-    if (location.pathname === '/new') {
+    if (isNewRoute) {
       if (!showForm) setShowForm(true);
       if (selectedThread) setSelectedThread(null);
-    } else {
-      // Leaving /new should hide the form unless explicitly re-opened
-      if (showForm && location.pathname !== '/new') {
-        setShowForm(false);
-      }
+    } else if (showForm) {
+      setShowForm(false);
     }
-  }, [location.pathname]);
+  }, [isNewRoute, showForm, selectedThread]);
 
-  const fetchThreads = async () => {
+  const fetchCluster = async (id: string) => {
     try {
-      const data = await requestJson<{ threads: ThreadApiResponse[] }>(`${API_URL}/thread/all`);
+      setClusterLoading(true);
+      setClusterError(null);
+  const cluster = await requestJson<Cluster>(`${API_URL}/clusters/${id}`);
+  setClusterName(cluster.name || id);
+      setClusterError(null);
+    } catch (error) {
+      console.error('Error fetching cluster:', error);
+      if (error instanceof ApiError) {
+        setClusterError(error.message);
+        toast.error(error.message);
+      } else {
+        setClusterError('Failed to load cluster information');
+        toast.error('Failed to load cluster information');
+      }
+      setClusterName('');
+      setThreads([]);
+      setSelectedThread(null);
+    } finally {
+      setClusterLoading(false);
+    }
+  };
+
+  const fetchThreads = async (targetClusterId?: string) => {
+    const resolvedClusterId = targetClusterId ?? clusterId;
+    if (!resolvedClusterId) {
+      return;
+    }
+    try {
+      const data = await requestJson<{ threads: ThreadApiResponse[] }>(`${API_URL}/thread/all?cluster_id=${encodeURIComponent(resolvedClusterId)}`);
       const fetched: ThreadApiResponse[] = data.threads || [];
       const normalized = fetched.map(normalizeThreadResponse);
       // Sort descending by created_at (most recent first). Guard against invalid dates.
@@ -185,6 +238,11 @@ const Index = () => {
       setThreadLoading(true);
       const apiThread = await requestJson<ThreadApiResponse>(`${API_URL}/thread/${id}`);
       const normalizedThread = normalizeThreadResponse(apiThread);
+      if (normalizedThread.cluster_id && clusterId && normalizedThread.cluster_id !== clusterId) {
+        toast.error('Thread belongs to a different cluster. Redirecting.');
+        navigate(`/cluster/${normalizedThread.cluster_id}/thread/${id}`, { replace: true });
+        return;
+      }
       setSelectedThread(normalizedThread);
 
       if (!normalizedThread.generated) {
@@ -316,9 +374,17 @@ const Index = () => {
   };
 
   const handleNewThread = () => {
-    // Navigate to /new to reflect new thread creation intent
-    if (location.pathname !== '/new') {
-      navigate('/new', { replace: false });
+    if (clusterError) {
+      toast.error(clusterError);
+      return;
+    }
+    if (!clusterId) {
+      toast.error('Select a cluster before creating a thread');
+      return;
+    }
+    const creationPath = `/cluster/${clusterId}/new`;
+    if (location.pathname !== creationPath) {
+      navigate(creationPath, { replace: false });
     }
     // Stop listening to any previous thread updates
     socketCleanupRef.current?.();
@@ -330,8 +396,17 @@ const Index = () => {
   };
 
   const handleStartGenerating = () => {
-    if (location.pathname !== '/new') {
-      navigate('/new');
+    if (clusterError) {
+      toast.error(clusterError);
+      return;
+    }
+    if (!clusterId) {
+      toast.error('Select a cluster before creating a thread');
+      return;
+    }
+    const creationPath = `/cluster/${clusterId}/new`;
+    if (location.pathname !== creationPath) {
+      navigate(creationPath);
     }
     // Stop listening to any previous thread updates
     socketCleanupRef.current?.();
@@ -346,14 +421,23 @@ const Index = () => {
   }
 
   const handleGenerate = async (formData: any) => {
+    if (clusterError) {
+      toast.error(clusterError);
+      return;
+    }
+    if (!clusterId) {
+      toast.error('Select a cluster before generating worklets');
+      return;
+    }
     // Preserve form data in case of failure
     const previousFormData = { ...formData };
-    const newThreadId = safeUUID().replace(/-/g, '').slice(0, 6);
+    const newThreadId = safeUUID().replace(/-/g, '').slice(0, 7);
 
     // Optimistically create a local thread representation
     const optimisticThread: Thread = {
       thread_id: newThreadId,
       thread_name: formData.thread_name,
+      cluster_id: clusterId,
       custom_prompt: formData.custom_prompt,
       links: formData.links,
       // Store only filenames for optimistic UI to match Thread type and avoid rendering File objects
@@ -378,7 +462,7 @@ const Index = () => {
     setWorkletsStore(prev => ({ ...prev, [newThreadId]: [] }));
 
     // Navigate to the new thread URL
-    navigate(`/thread/${newThreadId}`);
+  navigate(`/cluster/${clusterId}/thread/${newThreadId}`);
 
     // Start listening for updates BEFORE sending request
     setupSocketListeners(newThreadId);
@@ -388,6 +472,7 @@ const Index = () => {
     const body = new FormData();
     body.append('thread_id', newThreadId);
     body.append('thread_name', formData.thread_name);
+  body.append('cluster_id', clusterId);
     body.append('custom_prompt', formData.custom_prompt);
     body.append('count', formData.count.toString());
     body.append('links', JSON.stringify(formData.links));
@@ -411,7 +496,7 @@ const Index = () => {
       // Hide progress box by marking thread as generated above; do not append more progress UI entries
       setProgressMessages([]);
       stopInitializing();
-      fetchThreads();
+  fetchThreads(clusterId);
       toast.success('Worklets generated successfully');
     } catch (error) {
       console.error('Error generating worklets:', error);
@@ -428,7 +513,7 @@ const Index = () => {
         toast.error('Failed to generate worklets');
       }
 
-      navigate('/new', { state: { previousFormData } });
+      navigate(`/cluster/${clusterId}/new`, { state: { previousFormData } });
       setShowForm(true);
       setSelectedThread(null);
       setProgressMessages([]);
@@ -479,6 +564,14 @@ const Index = () => {
   };
 
   const handleSelectThread = (id: string) => {
+    if (clusterError) {
+      toast.error(clusterError);
+      return;
+    }
+    if (!clusterId) {
+      toast.error('Select a cluster first');
+      return;
+    }
     // If the user clicks the already selected thread, do nothing
     if (id === threadId) return;
     // Persist current thread's progress/worklets before switching
@@ -492,7 +585,7 @@ const Index = () => {
     setWorklets([]);
     stopInitializing();
     setThreadLoading(true);
-    navigate(`/thread/${id}`);
+    navigate(`/cluster/${clusterId}/thread/${id}`);
   };
 
   const handleHeaderClick = () => {
@@ -516,7 +609,11 @@ const Index = () => {
       setWorkletsStore(prev => { const { [id]: _, ...rest } = prev; return rest; });
       // If deleted thread is selected or currently in route, navigate away
       if (threadId === id) {
-        navigate('/');
+        if (clusterId) {
+          navigate(`/cluster/${clusterId}`);
+        } else {
+          navigate('/');
+        }
         setSelectedThread(null);
         setProgressMessages([]);
         stopInitializing();
@@ -660,6 +757,7 @@ const Index = () => {
             onDeleteThread={handleDeleteThread}
             collapsed={sidebarCollapsed}
             onToggleCollapse={toggleSidebar}
+            clusterName={clusterName || clusterId || ''}
           />
         </ResizablePanel>
         <ResizableHandle withHandle={!sidebarCollapsed} />
@@ -670,54 +768,89 @@ const Index = () => {
         >
           <main className="h-full overflow-auto">
         <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-          <div className="p-6 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={handleHeaderClick}
-              className="text-left focus:outline-none"
-            >
+          <div className="p-6 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-6">
+              <button
+                type="button"
+                onClick={handleHeaderClick}
+                className="text-left focus:outline-none"
+              >
                 <h1 className="text-3xl font-bold text-foreground">
-                {PROJECT_NAME}
-              </h1>
-            </button>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={toggleTheme}
-                    className="ml-4"
-                  >
-                    {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  Switch to {theme === 'dark' ? 'light' : 'dark'} mode
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+                  {PROJECT_NAME}
+                </h1>
+              </button>
+              <div className="flex flex-col">
+                <span className="text-xs uppercase tracking-wide text-muted-foreground">Cluster</span>
+                <span className="text-lg font-semibold text-foreground">
+                  {clusterLoading ? 'Loading...' : clusterError ? 'Unavailable' : clusterName || clusterId || 'Unknown'}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button variant="outline" onClick={handleHeaderClick} className="hidden sm:inline-flex">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Clusters
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleHeaderClick}
+                className="sm:hidden"
+                aria-label="Back to clusters"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={toggleTheme}
+                      className="ml-0"
+                    >
+                      {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Switch to {theme === 'dark' ? 'light' : 'dark'} mode
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
           </div>
         </header>
 
         <div className="p-6">
-          {/* Show welcome screen only on root path ("/") with no thread selected and not in /new */}
-          {!showForm && !selectedThread && location.pathname === '/' && (
+          {clusterError && (
+            <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
+              <p className="text-lg text-destructive">{clusterError}</p>
+              <Button variant="outline" onClick={handleHeaderClick}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to clusters
+              </Button>
+            </div>
+          )}
+
+          {!clusterError && clusterId && showForm && !selectedThread && isNewRoute && (
+            <ThreadForm onGenerate={handleGenerate} clusterName={clusterName || clusterId || ''} />
+          )}
+
+          {!clusterError && clusterId && !showForm && !selectedThread && !threadId && !clusterLoading && (
             <WelcomeScreen onStartGenerating={handleStartGenerating} />
           )}
 
-          {/* Show form when /new route is active and no thread selected */}
-          {showForm && !selectedThread && location.pathname === '/new' && (
-            <ThreadForm onGenerate={handleGenerate} />
+          {!clusterError && clusterLoading && !selectedThread && !showForm && (
+            <div className="py-24 text-center text-muted-foreground">Loading threads...</div>
           )}
 
-          {threadLoading && (
+          {threadLoading && !clusterError && (
             <div className="space-y-6">
               <CardSkeleton />
               <CardSkeleton />
             </div>
           )}
-          {!threadLoading && selectedThread && (
+          {!threadLoading && !clusterError && selectedThread && (
             <>
               {!selectedThread.generated && (
                 <ProgressBar messages={progressMessages} />
@@ -726,6 +859,7 @@ const Index = () => {
                 thread={selectedThread}
                 worklets={worklets}
                 onUpdateWorklet={handleWorkletUpdate}
+                clusterName={clusterName || clusterId || ''}
               />
             </>
           )}

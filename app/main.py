@@ -7,7 +7,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.routes import generate, health, iterate, select, thread
+from app.routes import cluster, generate, health, iterate, select, thread
 from app.socket_handler import sio
 
 fastapi_app = FastAPI()
@@ -69,6 +69,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 
 fastapi_app.include_router(health.router)
+fastapi_app.include_router(cluster.router)
 fastapi_app.include_router(thread.router)
 fastapi_app.include_router(generate.router)
 fastapi_app.include_router(iterate.router)

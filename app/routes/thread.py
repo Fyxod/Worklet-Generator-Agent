@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from typing import List
 import io, zipfile
 import unicodedata
 import re
@@ -111,8 +110,9 @@ def _content_disposition(filename: str) -> str:
 
 
 @router.get("/all")
-async def get_all_threads():
-    threads = db.threads.find({}, {"_id": 0})
+async def get_all_threads(cluster_id: str | None = None):
+    query = {"cluster_id": cluster_id} if cluster_id else {}
+    threads = db.threads.find(query, {"_id": 0})
     return {"threads": list(threads)}
 
 

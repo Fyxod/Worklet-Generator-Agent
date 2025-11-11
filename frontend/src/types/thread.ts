@@ -119,6 +119,7 @@ export interface IterateWorkletResponse {
 export interface Thread {
   thread_id: string;
   thread_name: string;
+  cluster_id: string;
   custom_prompt?: string;
   links?: string[];
   files?: string[];

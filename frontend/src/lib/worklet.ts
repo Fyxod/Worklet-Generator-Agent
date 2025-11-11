@@ -155,8 +155,12 @@ export const ensureTransformedWorklet = (input: WorkletPayload): TransformedWork
 export const normalizeThreadResponse = (thread: ThreadApiResponse): Thread => {
     const { worklets, ...rest } = thread;
     const normalizedWorklets = Array.isArray(worklets) ? worklets.map(ensureTransformedWorklet) : [];
+    const base = { ...(rest as Record<string, unknown>) };
+    if (typeof base.cluster_id !== 'string') {
+        base.cluster_id = '';
+    }
     return {
-        ...(rest as Omit<Thread, 'worklets'>),
+        ...(base as Omit<Thread, 'worklets'>),
         worklets: normalizedWorklets,
     };
 };

@@ -57,6 +57,7 @@ interface ThreadDetailsProps {
   thread: Thread;
   worklets: TransformedWorklet[];
   onUpdateWorklet: (worklet: TransformedWorklet) => void;
+  clusterName?: string;
 }
 
 type FieldType = 'string' | 'array' | 'object';
@@ -108,7 +109,7 @@ const getAttribute = (
   return worklet[key];
 };
 
-export const ThreadDetails = ({ thread, worklets, onUpdateWorklet }: ThreadDetailsProps) => {
+export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }: ThreadDetailsProps) => {
   const [activeWorkletId, setActiveWorkletId] = useState<string | null>(null);
   const [fieldViewIndices, setFieldViewIndices] = useState<Record<WorkletFieldKey, number>>({} as Record<WorkletFieldKey, number>);
   const [selectingField, setSelectingField] = useState<WorkletFieldKey | null>(null);
@@ -338,6 +339,12 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet }: ThreadDetai
       <Card className="space-y-4 border-border bg-card p-6">
         <h3 className="text-xl font-semibold text-foreground">Thread Details</h3>
         <div className="space-y-3">
+          {clusterName && (
+            <div>
+              <p className="text-sm text-muted-foreground">Cluster</p>
+              <p className="text-foreground">{clusterName}</p>
+            </div>
+          )}
           <div>
             <p className="text-sm text-muted-foreground">Thread ID</p>
             <p className="font-mono text-foreground">{thread.thread_id}</p>

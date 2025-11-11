@@ -1,5 +1,5 @@
 from pymongo import MongoClient
-from pymongo.errors import CollectionInvalid
+from pymongo.errors import CollectionInvalid, OperationFailure
 from core.config import settings
 
 MONGO_URI = settings.DATABASE_URL
@@ -10,7 +10,14 @@ db = client[settings.DATABASE_NAME]
 thread_schema = {
     "$jsonSchema": {
         "bsonType": "object",
-        "required": ["thread_id", "thread_name", "count", "worklets", "created_at"],
+        "required": [
+            "thread_id",
+            "thread_name",
+            "cluster_id",
+            "count",
+            "worklets",
+            "created_at",
+        ],
         "properties": {
             "thread_id": {
                 "bsonType": "string",
@@ -19,6 +26,10 @@ thread_schema = {
             "thread_name": {
                 "bsonType": "string",
                 "description": "Name of the thread",
+            },
+            "cluster_id": {
+                "bsonType": "string",
+                "description": "Identifier of the cluster this thread belongs to",
             },
             "custom_prompt": {
                 "bsonType": ["string", "null"],
@@ -204,11 +215,69 @@ thread_schema = {
 }
 
 
-try:
-    db.create_collection("threads", validator=thread_schema)
-    db.threads.create_index("thread_id", unique=True)
-    print("Collection 'threads' created with schema validation.")
-except CollectionInvalid:
-    print("Collection 'threads' already exists.")
-except Exception as e:
-    print("Error creating collection:", e)
+cluster_schema = {
+    "$jsonSchema": {
+        "bsonType": "object",
+        "required": ["cluster_id", "name", "created_at"],
+        "properties": {
+            "cluster_id": {
+                "bsonType": "string",
+                "description": "Unique cluster identifier",
+            },
+            "name": {
+                "bsonType": "string",
+                "description": "Display name for the cluster",
+            },
+            "created_at": {
+                "bsonType": "date",
+                "description": "Creation timestamp for the cluster",
+            },
+            "updated_at": {
+                "bsonType": ["date", "null"],
+                "description": "Last updated timestamp for the cluster",
+            },
+        },
+    }
+}
+
+
+def _ensure_collection(name, schema, index_builders):
+    created = False
+    try:
+        db.create_collection(name, validator=schema)
+        created = True
+        print(f"Collection '{name}' created with schema validation.")
+    except CollectionInvalid:
+        try:
+            db.command("collMod", name, validator=schema)
+        except OperationFailure as exc:
+            print(f"Warning: could not update validator for '{name}': {exc}")
+    except Exception as exc:  # pragma: no cover - defensive logging
+        print(f"Error creating collection '{name}': {exc}")
+
+    for builder in index_builders:
+        try:
+            builder()
+        except Exception as exc:  # pragma: no cover - defensive logging
+            print(f"Warning: failed creating index on '{name}': {exc}")
+
+    return created
+
+
+_ensure_collection(
+    "threads",
+    thread_schema,
+    [
+        lambda: db.threads.create_index("thread_id", unique=True),
+        lambda: db.threads.create_index("cluster_id"),
+    ],
+)
+
+_ensure_collection(
+    "clusters",
+    cluster_schema,
+    [
+        lambda: db.clusters.create_index("cluster_id", unique=True),
+        lambda: db.clusters.create_index("name"),
+    ],
+)

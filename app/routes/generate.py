@@ -17,6 +17,7 @@ router = APIRouter(prefix="/generate", tags=["generate"])
 async def generate(
     thread_id: Annotated[str, Form()],
     thread_name: Annotated[str, Form()],
+    cluster_id: Annotated[str, Form()],
     count: Annotated[int, Form()],
     links: Annotated[str, Form()],
     custom_prompt: Annotated[str, Form()],
@@ -34,11 +35,19 @@ async def generate(
             detail="Thread ID already exists. Please choose a different ID.",
         )
 
+    cluster = db.clusters.find_one({"cluster_id": cluster_id})
+    if not cluster:
+        raise HTTPException(
+            status_code=404,
+            detail="Cluster not found.",
+        )
+
     file_names = [file.filename for file in files] if files else []
     links_array = process_array_string(links) if links else []
     thread_dict = {
         "thread_id": thread_id,
         "thread_name": thread_name,
+        "cluster_id": cluster_id,
         "count": count,
         "links": links_array,
         "custom_prompt": custom_prompt,
@@ -52,6 +61,7 @@ async def generate(
         {
             "thread_id": thread_id,
             "thread_name": thread_name,
+            "cluster_id": cluster_id,
             "count": count,
             "links": links_array,
             "custom_prompt": custom_prompt,
