@@ -21,7 +21,7 @@ const ClustersPage = () => {
   const { theme, toggleTheme } = useTheme();
 
   const [clusters, setClusters] = useState<Cluster[]>([]);
-  const [sortOption, setSortOption] = useState<'created' | 'updated' | 'alphabetical'>('created');
+  const [sortOption, setSortOption] = useState<'created' | 'updated' | 'alphabetical'>('updated');
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');

@@ -25,7 +25,7 @@ interface ThemeProviderProps {
 
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({
   children,
-  defaultTheme = 'dark',
+  defaultTheme = 'light',
 }) => {
   const [theme, setTheme] = useState<Theme>(() => {
     // Check localStorage first, then system preference, then default
