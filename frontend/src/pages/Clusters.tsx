@@ -195,6 +195,9 @@ const ClustersPage = () => {
 
   return (
     <div className="min-h-screen w-full bg-background">
+      <div className="fixed top-4 left-4 z-50">
+        <img src="/prism_logo.png" alt="Prism Logo" className="h-20 w-auto" />
+      </div>
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
           <div>
@@ -277,10 +280,17 @@ const ClustersPage = () => {
 
         <div className="grid gap-8 justify-center" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
           {creating && (
-            <Card className="relative h-80 w-60 mx-auto flex flex-col justify-between border-dashed border-2 border-primary/60 bg-card">
-              <form onSubmit={handleCreateCluster} className="flex flex-1 flex-col">
-                <div className="p-6 flex-1 flex flex-col gap-4">
-                  <h2 className="text-lg font-semibold text-foreground">New cluster</h2>
+            <Card className="relative h-80 w-60 mx-auto flex flex-col justify-between border-dashed border-2 border-primary/60 overflow-hidden">
+              {/* subtle, semi-transparent gradient overlay (less opaque than full gradient) */}
+              <div
+                aria-hidden
+                className="absolute inset-0"
+                style={{ background: 'linear-gradient(135deg, hsl(var(--primary) / 0.75), hsl(220 70% 50% / 0.55))', pointerEvents: 'none' }}
+              />
+              <div className="relative z-10 flex flex-1 flex-col">
+                <form onSubmit={handleCreateCluster} className="flex flex-1 flex-col">
+                  <div className="p-6 flex-1 flex flex-col gap-4">
+                    <h2 className="text-lg font-semibold text-primary-foreground">New cluster</h2>
                   <Input
                     ref={inputRef}
                     value={newName}
@@ -309,6 +319,7 @@ const ClustersPage = () => {
                   </Button>
                 </div>
               </form>
+              </div>
             </Card>
           )}
 
@@ -336,12 +347,19 @@ const ClustersPage = () => {
                 onClick={handleOpenCluster}
                 onKeyDown={handleKeyActivate}
                 // Ensure the card hides overflow and allows inner flex children to constrain height
-                className={`relative h-80 w-60 mx-auto flex flex-col items-center justify-center border-border bg-card transition-smooth focus:outline-none focus:ring-2 focus:ring-primary/50 overflow-hidden ${isEditing ? '' : 'hover:border-primary cursor-pointer'}`}
+                className={`relative h-80 w-60 mx-auto flex flex-col items-center justify-center border-border transition-smooth focus:outline-none focus:ring-2 focus:ring-primary/50 overflow-hidden ${isEditing ? '' : 'hover:brightness-105 cursor-pointer'}`}
               >
+                {/* toned-down semi-transparent gradient overlay */}
+                <div
+                  aria-hidden
+                  className="absolute inset-0"
+                  style={{ background: 'linear-gradient(135deg, hsl(var(--primary) / 0.7), hsl(220 70% 50% / 0.5))', pointerEvents: 'none' }}
+                />
+                <div className="relative z-10 flex-1 flex flex-col items-center justify-center w-full">
                 <div className="absolute top-3 right-3 flex items-center gap-2">
                   <button
                     type="button"
-                    className="rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-smooth"
+                    className="rounded-full p-2 text-white hover:bg-muted/20 transition-smooth"
                     onClick={(event) => {
                       event.stopPropagation();
                       handleRenameClick(cluster);
@@ -354,7 +372,7 @@ const ClustersPage = () => {
                     <AlertDialogTrigger asChild>
                       <button
                         type="button"
-                        className="rounded-full p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-smooth"
+                        className="rounded-full p-2 text-white hover:bg-destructive/10 transition-smooth"
                         onClick={(event) => {
                           event.stopPropagation();
                           setConfirmDeleteId(cluster.cluster_id);
@@ -414,11 +432,12 @@ const ClustersPage = () => {
                   // overflow-y-auto to keep long names inside the card.
                   <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-6 text-center w-full">
                     <div className="min-h-0 max-h-full w-full overflow-y-auto">
-                      <h2 className="text-xl font-semibold text-foreground break-words whitespace-pre-wrap leading-snug">{cluster.name}</h2>
-                    </div>
+                        <h2 className="text-xl font-semibold text-primary-foreground break-words whitespace-pre-wrap leading-snug">{cluster.name}</h2>
+                      </div>
                   </div>
                 )}
-              </Card>
+                  </div>
+                </Card>
             );
           })}
         </div>

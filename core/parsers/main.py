@@ -76,9 +76,6 @@ async def extract_document(path, title="Untitled", file_name=None, thread_id=Non
 
         doc_id = str(uuid.uuid4())
         end_time = time.time()
-        print(
-            f"Time taken to process {safe_file_name} main image: {end_time - start_time} seconds"
-        )
         return Document(
             id=doc_id,
             type=ext[1:],

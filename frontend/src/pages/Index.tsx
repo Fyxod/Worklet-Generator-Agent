@@ -776,6 +776,7 @@ const Index = () => {
         <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
           <div className="p-6 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-6">
+              <img src="/prism_logo.png" alt="Prism Logo" className="h-16 w-auto" />
               <button
                 type="button"
                 onClick={handleHeaderClick}
