@@ -107,11 +107,11 @@ def unified_problem_generation_prompt(
                 '      "reasoning": "<succinct rationale for proposing this worklet>",\n'
                 '      "challenge_use_case": "<Atleast 2 relevant use cases or scenarios>",\n'
                 '      "deliverables": "<expected outputs - app, model, system, dataset, etc. Please include domain relevant, top in class and international standard paper publications, conferences, journals or forums. Look for patent possibilities.>",\n'
-                '      "kpis": <Mention reasoning behind every KPI and mention SOTA wherever possible>["<metric 1>", "<metric 2>", "<metric 3>", "<metric 4>"],\n'
+                '      "kpis": <Mention reasoning behind every KPI and mention SOTA wherever possible>,\n'
                 '      "prerequisites": ["<prereq 1>", "<prereq 2>", "<prereq 3>", "<prereq 4>", "<prereq 5>", "<prereq 6>"],\n'
                 '      "infrastructure_requirements": "<hardware requirements>",\n'
                 '      "tech_stack": "<languages, libraries, APIs, frameworks>",\n'
-                '      "milestones": {"M2": "<checkpoint>", "M4": "<checkpoint>", "M6": "<final deliverable>"}\n'
+                '      "milestones": <example output: {"M2": "<checkpoint>", "M4": "<checkpoint>", "M6": "<final deliverable>"}>\n'
                 "    }\n"
                 "  ]\n"
                 "}\n"

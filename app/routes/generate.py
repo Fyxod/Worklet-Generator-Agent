@@ -69,6 +69,7 @@ async def generate(
         }
     )
     state = AgentState(
+        cluster_name=cluster["name"],
         thread_id=thread_id,
         count=count,
         files=files,

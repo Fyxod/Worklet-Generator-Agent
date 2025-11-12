@@ -25,7 +25,7 @@ class Worklet(BaseModel):
     )
     reasoning: str = Field("", description="LLM's rationale for proposing this worklet")
     challenge_use_case: str = Field(
-        ..., description="Specific challenge or use case addressed by the project idea"
+        ..., description="Atleast 2 relevant use cases or scenarios addressed by the project idea"
     )
     deliverables: str = Field(
         ..., description="Expected deliverables of the project idea"
@@ -43,7 +43,7 @@ class Worklet(BaseModel):
         ..., description="Tentative technology stack for the project idea"
     )
     milestones: dict = Field(
-        ..., description="Milestones for the project idea over a 6-month period"
+        ..., description="Milestones for the project idea"
     )
 
 

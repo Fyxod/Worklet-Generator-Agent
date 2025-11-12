@@ -55,7 +55,7 @@ All colors MUST be HSL.
   }
 
   .light {
-    --background: 0 0% 100%;
+    --background: 40 15% 97%;
     --foreground: 240 10% 3.9%;
 
     --card: 0 0% 100%;
@@ -80,8 +80,8 @@ All colors MUST be HSL.
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
+    --border: 240 5% 92%;
+    --input: 240 2% 98%;
     --ring: 263 70% 50%;
 
     --sidebar-background: 0 0% 98%;

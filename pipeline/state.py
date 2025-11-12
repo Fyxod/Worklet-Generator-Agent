@@ -8,6 +8,7 @@ from core.models.document import Documents
 from core.models.worklet import Worklet, SimpleDomainsKeywords
 
 class AgentState(BaseModel):
+    cluster_name: str
     thread_id: str
     count: int
     files: Optional[List[Any]] = None

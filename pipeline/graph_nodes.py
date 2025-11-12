@@ -49,6 +49,7 @@ from core.utils.get_approved_queries import get_approved_queries
 from core.utils.fix_dashes import fix_dashes
 from app.broadcast import update_message, stop_broadcasting
 from core.utils.transform_worklet import transform_worklet
+from core.cluster_config import get_cluster_terms
 
 os.makedirs("debug", exist_ok=True)
 
@@ -127,6 +128,16 @@ async def extract_keywords_domains(state: AgentState) -> AgentState:
             keywords=Sources(worklet=[], link=[], custom_prompt=[]),
             domains=Sources(worklet=[], link=[], custom_prompt=[]),
         )
+
+    hardcoded_terms = get_cluster_terms(state.cluster_name)
+    if hardcoded_terms:
+        for term in hardcoded_terms.get("keywords", []):
+            if term not in result.keywords.custom_prompt:
+                result.keywords.custom_prompt.append(term)
+
+        for term in hardcoded_terms.get("domains", []):
+            if term not in result.domains.custom_prompt:
+                result.domains.custom_prompt.append(term)
 
     updated_domains, updated_keywords = await get_approved_items(
         result.domains.model_dump(), result.keywords.model_dump(), state.thread_id
@@ -317,7 +328,11 @@ async def generate_files(state: AgentState) -> AgentState:
     # update the worklet files in the db
     db.threads.update_one(
         {"thread_id": state.thread_id},
-        {"$set": {"worklets": [transform_worklet(w.model_dump()) for w in state.worklets]}},
+        {
+            "$set": {
+                "worklets": [transform_worklet(w.model_dump()) for w in state.worklets]
+            }
+        },
     )
 
     s = time.time()
