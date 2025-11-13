@@ -111,7 +111,7 @@ All colors MUST be HSL.
   .light {
     --card: 249 100% 94%;
     --card-foreground: 258 78.2% 32.4%;
-    --input: 0 0% 100%;
+    --input: 249 100% 98%;
     --border: 249 64% 84%;
     --ring: 249 84.7% 64.1%;
     --shadow-glow: 0 0 40px hsl(249 84.7% 64.1% / 0.32);
