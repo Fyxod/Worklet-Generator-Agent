@@ -8,13 +8,12 @@ SWITCHES = {
     "RANK_REFERENCES": True,  # Whether to rank references based on relevance
     "FALLBACK_TO_GEMINI": True,  # Fallback to Gemini if Ollama fails
     "FALLBACK_TO_OPENAI": False,  # Fallback to OpenAI if BOTH Ollama and Gemini fails
-
     "REMOTE_GPU": settings.REMOTE_GPU,  # Use remote GPU LLMs
     # please refer to core/Setup_Local_ollama.md for setting up local LLM server
 }
 
-PORT1 = 11434   # port where ollama is running
-PORT2 = 11435   # port where second ollama instance is running 
+PORT1 = 11434  # port where ollama is running
+PORT2 = 11435  # port where second ollama instance is running
 
 GPU_MODEL = "gpt-oss:20b-50k-8k"
 MAX_TOKENS = 50000
@@ -38,11 +37,11 @@ FALLBACK_OPENAI_MODEL = "gpt-4o-mini"
 # Graph constants used in agent
 PROCESS_INPUT = "process_input"
 EXTRACT_KEYWORDS_DOMAINS = "extract_keywords_domains"
+GENERATE_WEB_SEARCH_QUERIES = "generate_web_search_queries"
 GENERATE_WORKLETS = "generate_worklets"
 WEB_SEARCH = "web_search"
 REFERENCES = "references"
 RANK_REFERENCES = "rank_references"
 GENERATE_FILES = "generate_files"
-ROUTER = "router"
 ANSWER = "answer"
 FAILURE = "failure"

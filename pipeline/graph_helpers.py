@@ -1,6 +1,7 @@
 from core.llm.prompts.extraction_prompt import keyword_domain_extraction_prompt
-from core.llm.prompts.main_prompt import unified_problem_generation_prompt
+from core.llm.prompts.main_prompt import worklet_generation_prompt
 from core.llm.prompts.reference_ranking_prompt import reference_ranking_prompt
+from core.llm.prompts.web_search_prompt import web_search_query_planner_prompt
 import asyncio
 from core.utils.compress_prompt import compress_main_prompt, compress_references
 from core.constants import MAX_TOKENS
@@ -62,7 +63,7 @@ def build_main_prompt(state: AgentState) -> list:
         if modified_state.parsed_data
         else []
     )
-    return unified_problem_generation_prompt(
+    return worklet_generation_prompt(
         count=modified_state.count,
         keywords=(
             modified_state.keywords_domains.keywords
@@ -76,13 +77,47 @@ def build_main_prompt(state: AgentState) -> list:
         ),
         custom_prompt=modified_state.custom_prompt or "",
         worklet_data=worklet_data,
-        links_data=modified_state.links_data,
-        web_search_used=modified_state.web_search or False,
-        web_search_results=(
-            modified_state.web_search_results or None
-            if modified_state.web_search
-            else None
+        links_data=modified_state.links_data or [],
+        web_search_results=modified_state.web_search_results or [],
+    )
+
+
+def build_search_queries_prompt(state: AgentState) -> list:
+    modified_state: AgentState = compress_main_prompt(
+        state.model_copy(),
+        max_tokens=MAX_TOKENS,
+        prompt_offset=900,
+        pass_limit=10,
+        verbose=True,
+    )
+
+    worklet_data = (
+        [
+            {
+                "file_name": doc.file_name,
+                "extracted_text": doc.full_text,
+            }
+            for doc in modified_state.parsed_data.documents
+        ]
+        if modified_state.parsed_data
+        else []
+    )
+
+    return web_search_query_planner_prompt(
+        count=modified_state.count,
+        keywords=(
+            modified_state.keywords_domains.keywords
+            if modified_state.keywords_domains
+            else []
         ),
+        domains=(
+            modified_state.keywords_domains.domains
+            if modified_state.keywords_domains
+            else []
+        ),
+        custom_prompt=modified_state.custom_prompt or "",
+        worklet_data=worklet_data,
+        links_data=modified_state.links_data or [],
     )
 
 

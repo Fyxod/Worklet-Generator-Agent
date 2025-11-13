@@ -1,17 +1,15 @@
-import json
 import time
 import os
-import aiofiles
 import asyncio
 
 from pipeline.graph_helpers import (
     build_extraction_prompt,
     build_main_prompt,
+    build_search_queries_prompt,
     parallel_search,
     build_reference_ranking_prompt,
 )
 from pipeline.state import AgentState
-from pipeline.tools.search import search_tavily as search_tool
 from core.models.worklet import SimpleDomainsKeywords
 
 # from core.constants import *
@@ -20,13 +18,14 @@ from core.llm.client import invoke_llm
 from core.models.worklet import Worklet
 from core.llm.outputs import (
     KeywordsExtractionResult,
+    WebSearchQueryResult,
     WorkletGenerationResult,
     ReferenceKeywordResult,
     ReferenceSortingResult,
     Sources,
 )
 from core.references.generate_references import generate_references
-from core.constants import SWITCHES, WEB_SEARCH, REFERENCES
+from core.constants import SWITCHES
 from core.constants import (
     KEYWORD_DOMAIN_EXTRACTION_LLM,
     WORKLET_GENERATOR_LLM,
@@ -148,6 +147,36 @@ async def extract_keywords_domains(state: AgentState) -> AgentState:
     return state
 
 
+async def generate_web_search_queries(state: AgentState) -> AgentState:
+    s = time.time()
+    state.web_search = False
+    state.web_search_results = []
+    state.web_search_queries = []
+    prompt = build_search_queries_prompt(state)
+
+    await update_message(
+        {"message": "Gathering web search queries..."},
+        topic=f"{state.thread_id}/status_update",
+    )
+
+    result: WebSearchQueryResult = await invoke_llm(
+        gpu_model=WORKLET_GENERATOR_LLM.model,
+        response_schema=WebSearchQueryResult,
+        contents=prompt,
+        port=WORKLET_GENERATOR_LLM.port,
+    )
+
+    # Clean queries while preserving order
+    cleaned_queries = [q.strip() for q in result.web_search_queries if q.strip()]
+    state.web_search_queries = cleaned_queries
+
+    print(
+        "Web search query planning produced "
+        f"{len(cleaned_queries)} queries in {time.time() - s:.2f} seconds"
+    )
+    return state
+
+
 async def generate_worklets(state: AgentState) -> AgentState:
     s = time.time()
     prompt = build_main_prompt(state)
@@ -169,27 +198,31 @@ async def generate_worklets(state: AgentState) -> AgentState:
 
 
 async def web_search(state: AgentState) -> AgentState:
-    if (
-        not state.generation_output.web_search
-        or not state.generation_output.web_search_queries
-        or len(state.generation_output.web_search_queries) == 0
-    ):
+    queries = state.web_search_queries or []
+    if not queries:
+        print("No web search queries were generated; skipping search stage.")
+        state.web_search = False
+        state.web_search_results = []
         return state
 
     state.web_search = True
     s = time.time()
-    queries = state.generation_output.web_search_queries
-    if not queries:
-        print("No web search queries provided, skipping web search.")
+
+    approved_queries = await get_approved_queries(queries, state.thread_id)
+    state.web_search_queries = approved_queries
+
+    if not approved_queries:
+        print("Approved web search queries list is empty; skipping web search stage.")
+        state.web_search = False
+        state.web_search_results = []
         return state
 
-    queries = await get_approved_queries(queries, state.thread_id)
     await update_message(
         {"message": "Web search invoked..."}, topic=f"{state.thread_id}/status_update"
     )
 
-    print(f"Performing web search for queries: {queries}")
-    web_search_results = await parallel_search(queries)
+    print(f"Performing web search for queries: {approved_queries}")
+    web_search_results = await parallel_search(approved_queries)
 
     state.web_search_results = web_search_results
     print(f"Web search took {time.time() - s:.2f} seconds")
@@ -342,10 +375,3 @@ async def generate_files(state: AgentState) -> AgentState:
     print(f"{idx + 1} File generation took {time.time() - s:.2f} seconds")
     db.threads.update_one({"thread_id": state.thread_id}, {"$set": {"generated": True}})
     return state
-
-
-def router(state: AgentState) -> str:
-    if state.generation_output.web_search:
-        return WEB_SEARCH
-    else:
-        return REFERENCES

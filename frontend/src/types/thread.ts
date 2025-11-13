@@ -64,7 +64,7 @@ export interface Worklet {
   worklet_id: string;
   /** Title of the project idea */
   title: string;
-  /** Problem statement of the project idea (28-33 words) */
+  /** Problem statement of the project idea (min 50 words) */
   problem_statement: string;
   /** Description of the project idea (providing context/background, max 100 words) */
   description: string;

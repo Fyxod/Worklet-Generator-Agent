@@ -19,7 +19,7 @@ class Worklet(BaseModel):
     worklet_id: str = Field(..., description="Unique identifier for the worklet")
     title: str = Field(..., description="Title of the project idea")
     problem_statement: str = Field(
-        ..., description="Problem statement of the project idea (28-33 words)"
+        ..., description="Problem statement of the project idea (min 50 words)"
     )
     description: str = Field(
         ...,

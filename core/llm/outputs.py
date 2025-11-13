@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Literal, Optional
+from typing import List
 from pydantic import BaseModel, Field
 
 
@@ -17,7 +17,7 @@ class KeywordsExtractionResult(BaseModel):
 class Worklet(BaseModel):
     title: str = Field(..., description="Title of the project idea")
     problem_statement: str = Field(
-        ..., description="Problem statement of the project idea (28-33 words)"
+        ..., description="Problem statement of the project idea (min 50 words)"
     )
     description: str = Field(
         ...,
@@ -25,7 +25,8 @@ class Worklet(BaseModel):
     )
     reasoning: str = Field("", description="LLM's rationale for proposing this worklet")
     challenge_use_case: str = Field(
-        ..., description="Atleast 2 relevant use cases or scenarios addressed by the project idea"
+        ...,
+        description="Atleast 2 relevant use cases or scenarios addressed by the project idea",
     )
     deliverables: str = Field(
         ..., description="Expected deliverables of the project idea"
@@ -42,20 +43,18 @@ class Worklet(BaseModel):
     tech_stack: str = Field(
         ..., description="Tentative technology stack for the project idea"
     )
-    milestones: dict = Field(
-        ..., description="Milestones for the project idea"
+    milestones: dict = Field(..., description="Milestones for the project idea")
+
+
+class WebSearchQueryResult(BaseModel):
+    web_search_queries: List[str] = Field(
+        ...,
+        description="Ordered list of queries the agent should run during web search",
     )
 
 
 class WorkletGenerationResult(BaseModel):
     worklets: List[Worklet]
-    web_search: bool = Field(
-        False, description="Indicates if web search is needed for extra information"
-    )
-    web_search_queries: Optional[List[str]] = Field(
-        default_factory=list,
-        description="List of web search queries to be performed if web_search is True",
-    )
 
 
 class ReferenceKeywordResult(BaseModel):
