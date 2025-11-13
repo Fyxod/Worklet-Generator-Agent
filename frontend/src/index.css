@@ -11,7 +11,7 @@ All colors MUST be HSL.
     --background: 249 100% 98%;
     --foreground: 258 78.2% 32.4%;
 
-    --card: 249 100% 99%;
+    --card: 249 100% 94%;
     --card-foreground: 258 78.2% 32.4%;
 
     --popover: 249 100% 99%;
@@ -106,6 +106,15 @@ All colors MUST be HSL.
     --sidebar-ring: 249 84.7% 64.1%;
 
     --gradient-accent: var(--gradient-hero);
+  }
+
+  .light {
+    --card: 249 100% 94%;
+    --card-foreground: 258 78.2% 32.4%;
+    --input: 0 0% 100%;
+    --border: 249 64% 84%;
+    --ring: 249 84.7% 64.1%;
+    --shadow-glow: 0 0 40px hsl(249 84.7% 64.1% / 0.32);
   }
 }
 

@@ -407,8 +407,8 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h3 className="text-xl font-semibold text-foreground">Generated Files</h3>
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button className="gradient-accent transition-colors hover:opacity-90">
+                <DropdownMenuTrigger asChild>
+                <Button className="gradient-primary text-primary-foreground transition-colors hover:opacity-90">
                   <Download className="mr-2 h-4 w-4" />
                   Download All
                 </Button>
