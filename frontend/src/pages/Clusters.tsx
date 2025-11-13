@@ -285,7 +285,7 @@ const ClustersPage = () => {
               <div
                 aria-hidden
                 className="absolute inset-0"
-                style={{ background: 'linear-gradient(135deg, hsl(var(--primary) / 0.75), hsl(220 70% 50% / 0.55))', pointerEvents: 'none' }}
+                style={{ background: 'linear-gradient(135deg, hsl(var(--primary) / 0.75), hsl(var(--accent) / 0.55))', pointerEvents: 'none' }}
               />
               <div className="relative z-10 flex flex-1 flex-col">
                 <form onSubmit={handleCreateCluster} className="flex flex-1 flex-col">
@@ -353,7 +353,7 @@ const ClustersPage = () => {
                 <div
                   aria-hidden
                   className="absolute inset-0"
-                  style={{ background: 'linear-gradient(135deg, hsl(var(--primary) / 0.7), hsl(220 70% 50% / 0.5))', pointerEvents: 'none' }}
+                  style={{ background: 'linear-gradient(135deg, hsl(var(--primary) / 0.7), hsl(var(--accent) / 0.5))', pointerEvents: 'none' }}
                 />
                 <div className="relative z-10 flex-1 flex flex-col items-center justify-center w-full">
                 <div className="absolute top-3 right-3 flex items-center gap-2">

@@ -39,7 +39,7 @@ async def process_files(
         try:
             try:
                 await update_message(
-                    {"message": f"Processing {file_data['title']}"},
+                    {"message": f"Processing files..."},
                     topic=f"{thread_id}/status_update",
                 )
             except Exception as e:
