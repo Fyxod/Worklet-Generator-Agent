@@ -49,15 +49,12 @@ const Index = () => {
 
   // Resizable panels state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(true); // Start collapsed since no right panel content yet
-  const [layout, setLayout] = useState([19, 61, 20]); // [left, middle, right] percentages
+  const [layout, setLayout] = useState([19, 81]); // [left, middle] percentages
   const [containerWidth, setContainerWidth] = useState(window.innerWidth);
   const containerRef = useRef<HTMLDivElement>(null);
   const leftPanelRef = useRef<any>(null);
   const middlePanelRef = useRef<any>(null);
-  const rightPanelRef = useRef<any>(null);
   const prevSidebarSizeRef = useRef<number>(19);
-  const prevRightSizeRef = useRef<number>(20);
 
   const currentThreadIdRef = useRef<string | null>(null);
 
@@ -145,19 +142,6 @@ const Index = () => {
   };
 
   // Toggle right panel collapse
-  const toggleRightPanel = () => {
-    if (rightPanelCollapsed) {
-      // Expand
-      rightPanelRef.current?.resize(prevRightSizeRef.current);
-      setRightPanelCollapsed(false);
-    } else {
-      // Collapse
-      prevRightSizeRef.current = layout[2];
-      rightPanelRef.current?.resize(collapsedPercent);
-      setRightPanelCollapsed(true);
-    }
-  };
-
   // Handle layout changes
   const handleLayout = (sizes: number[]) => {
     setLayout(sizes);
@@ -872,18 +856,6 @@ const Index = () => {
           )}
             </div>
           </main>
-        </ResizablePanel>
-        <ResizableHandle withHandle={!rightPanelCollapsed} />
-        <ResizablePanel
-          ref={rightPanelRef}
-          defaultSize={layout[2]}
-          minSize={rightPanelCollapsed ? collapsedPercent : 12}
-          maxSize={rightPanelCollapsed ? collapsedPercent : 40}
-        >
-          {/* Right panel content - placeholder for now */}
-          <div className="h-full bg-muted/50 border-l border-border">
-            {/* Right sidebar content would go here */}
-          </div>
         </ResizablePanel>
       </ResizablePanelGroup>
 
