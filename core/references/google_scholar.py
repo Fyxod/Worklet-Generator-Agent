@@ -51,7 +51,6 @@ def get_google_scholar_references(keyword):
         return result
 
     except Exception as e:
-        print(f"Error while fetching Google Scholar references: {e}")
         return []
 
 
