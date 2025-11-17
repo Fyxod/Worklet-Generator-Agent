@@ -13,6 +13,8 @@ from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN
 from pptx.dml.color import RGBColor
 from typing import Any, List, Optional, Sequence
+from xml.sax.saxutils import escape
+
 from core.models.worklet import Worklet
 from core.utils.sanitize_filename import sanitize_filename
 import uuid
@@ -44,7 +46,14 @@ def ensure_list(value: Any) -> List:
     return [value]
 
 
-def normalize_text_list(value: Any) -> List[str]:
+_BULLET_PREFIX_RE = re.compile(r"^\s*[\u2022\-*\u2023]+\s*")
+
+
+def _strip_bullet_prefix(text: str) -> str:
+    return _BULLET_PREFIX_RE.sub("", text)
+
+
+def normalize_text_list(value: Any, *, split_on_delimiters: bool = True) -> List[str]:
     """Convert raw values into a list of trimmed, non-empty strings."""
 
     candidates = ensure_list(value)
@@ -53,21 +62,62 @@ def normalize_text_list(value: Any) -> List[str]:
         if candidate is None:
             continue
         if isinstance(candidate, str):
-            segments = re.split(r"[\r\n]+|\s*[;\u2022]\s*", candidate)
-            parts = [
-                segment.strip() for segment in segments if segment and segment.strip()
-            ]
-            if parts:
-                normalized.extend(parts)
+            text = candidate.replace("\r\n", "\n").strip()
+            if not text:
                 continue
-            text = candidate.strip()
-            if text:
-                normalized.append(text)
+            if split_on_delimiters:
+                segments = re.split(r"[\r\n]+|\s*[;\u2022]\s*", text)
+                for segment in segments:
+                    cleaned = _strip_bullet_prefix(segment.strip())
+                    if cleaned:
+                        normalized.append(cleaned)
+            else:
+                cleaned = _strip_bullet_prefix(text)
+                if cleaned:
+                    normalized.append(cleaned)
         else:
             text = str(candidate).strip()
             if text:
                 normalized.append(text)
     return normalized
+
+
+def format_multiline_pdf_bullet(text: str) -> str:
+    """Render a single bullet with optional indented sub-lines for PDF output."""
+
+    if not text:
+        return ""
+    lines = [
+        escape(line.strip())
+        for line in text.replace("\r\n", "\n").split("\n")
+        if line and line.strip()
+    ]
+    if not lines:
+        return ""
+    if len(lines) == 1:
+        return f"• {lines[0]}"
+    first, *rest = lines
+    rest_markup = "<br/>".join(f"&nbsp;&nbsp;{line}" for line in rest)
+    return f"• {first}<br/>{rest_markup}"
+
+
+def format_multiline_ppt_bullet(text: str) -> str:
+    """Render a single bullet with optional indented sub-lines for PPT output."""
+
+    if not text:
+        return ""
+    lines = [
+        line.strip()
+        for line in text.replace("\r\n", "\n").split("\n")
+        if line and line.strip()
+    ]
+    if not lines:
+        return ""
+    if len(lines) == 1:
+        return f"• {lines[0]}"
+    first, *rest = lines
+    continuation = "\n   ".join(rest)
+    return f"• {first}\n   {continuation}"
 
 
 def safe_get(obj: Any, keys: Sequence[str], default: Any = None) -> Any:
@@ -231,11 +281,13 @@ def create_pdf(filename: str, worklet: Worklet, in_memory: bool = False):
 
         # KPIs (list)
         raw_kpis = safe_get(worklet, FIELD_KEYS["kpis"])
-        kpis = normalize_text_list(raw_kpis)
+        kpis = normalize_text_list(raw_kpis, split_on_delimiters=False)
         if kpis:
             elements.append(Paragraph("<b>KPIs:</b>", normal_style))
             for kpi in kpis:
-                elements.append(Paragraph(f"• {kpi}", bullet_style))
+                bullet_text = format_multiline_pdf_bullet(kpi)
+                if bullet_text:
+                    elements.append(Paragraph(bullet_text, bullet_style))
             elements.append(Spacer(1, 6))
 
         # Prerequisites (list)
@@ -468,16 +520,18 @@ def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
 
         # KPIs (list)
         raw_kpis = safe_get(worklet, FIELD_KEYS["kpis"])
-        kpis = normalize_text_list(raw_kpis)
+        kpis = normalize_text_list(raw_kpis, split_on_delimiters=False)
         if kpis:
-            kpi_text = "\n".join([f"• {k}" for k in kpis])
+            formatted_kpis = [format_multiline_ppt_bullet(k) for k in kpis]
+            filtered_kpis = [entry for entry in formatted_kpis if entry]
+            kpi_text = "\n".join(filtered_kpis)
             if kpi_text:
                 try:
                     est_h = estimate_height_wrapped_content(kpi_text)
                     _ensure_space(est_h + gap)
                     top = add_textbox(slide, "KPIs", kpi_text, top)
                 except NameError:
-                    est_h = min(2.0, 0.3 * len(kpis) + 0.2)
+                    est_h = min(2.0, 0.3 * len(kpi_text.split("\n")) + 0.2)
                     _ensure_space(est_h + gap)
                     left = Inches(0.5)
                     top_inch = Inches(top)
@@ -486,13 +540,14 @@ def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
                     tb = slide.shapes.add_textbox(left, top_inch, width, height)
                     tf = tb.text_frame
                     tf.clear()
-                    for i, k in enumerate(kpis):
-                        if i == 0:
-                            p = tf.paragraphs[0]
-                            p.text = f"• {k}"
+                    added_any = False
+                    for entry in filtered_kpis:
+                        if not added_any:
+                            paragraph = tf.paragraphs[0]
+                            added_any = True
                         else:
-                            p = tf.add_paragraph()
-                            p.text = f"• {k}"
+                            paragraph = tf.add_paragraph()
+                        paragraph.text = entry
                     top += est_h + gap
 
         # Prerequisites (list)
