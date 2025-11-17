@@ -20,7 +20,7 @@ from core.utils.worklet_store import (
     iteration_to_worklet,
     upgrade_legacy_worklet_record,
 )
-
+from core.utils.fix_dashes import fix_dashes
 MAX_MODEL_ATTEMPTS = 10
 
 router = APIRouter(prefix="/worklet-iterations", tags=["worklet-iterations"])
@@ -166,6 +166,9 @@ async def enhance_worklet(payload: EnhanceWorkletRequest):
             detail=last_error
             or "Enhancement model failed to produce a valid response.",
         )
+
+    if not isinstance(enhanced_worklet, WorkletOutput):
+        enhanced_worklet = fix_dashes(enhanced_worklet)
 
     new_iteration = build_iteration_from_worklet(
         worklet_record["worklet_id"],

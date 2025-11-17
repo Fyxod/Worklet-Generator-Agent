@@ -17,6 +17,7 @@ from core.utils.worklet_store import (
     upgrade_legacy_worklet_record,
     extract_iteration_value as store_extract_iteration_value,
 )
+from core.utils.fix_dashes import fix_dashes
 import aiofiles
 
 
@@ -128,6 +129,9 @@ def _hydrate_worklet(
         payload[field_name] = _extract_iteration_value(
             field_name, field_payload, selected_index
         )
+
+        if isinstance(payload, Worklet):
+            payload = fix_dashes(payload)
 
     try:
         return Worklet.model_validate(payload)
