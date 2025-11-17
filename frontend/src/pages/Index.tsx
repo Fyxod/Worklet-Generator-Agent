@@ -8,7 +8,7 @@ import { DomainKeywordModal } from '@/components/DomainKeywordModal';
 import { WebQueryModal } from '@/components/WebQueryModal';
 import { ThreadDetails } from '@/components/ThreadDetails';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/resizable';
-import { Thread, DomainsKeywords, ProgressMessage, TransformedWorklet, ThreadApiResponse, WorkletPayload } from '@/types/thread';
+import { Thread, DomainsKeywords, ProgressMessage, ThreadApiResponse, WorkletPayload, WorkletWithIterations } from '@/types/thread';
 import { Cluster } from '@/types/cluster';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,7 @@ import { getSocket } from '@/lib/socket';
 import { toast } from 'sonner';
 import { API_URL, PROJECT_NAME } from '../../config';
 import { ApiError, requestJson, formatValidationDetails } from '@/lib/http';
-import { normalizeThreadResponse, ensureTransformedWorklet } from '@/lib/worklet';
+import { normalizeThreadResponse, ensureWorkletBundle } from '@/lib/worklet';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Sun, Moon, ArrowLeft } from 'lucide-react';
 
@@ -33,7 +33,7 @@ const Index = () => {
   const [threadLoading, setThreadLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [progressMessages, setProgressMessages] = useState<ProgressMessage[]>([]);
-  const [worklets, setWorklets] = useState<TransformedWorklet[]>([]);
+  const [worklets, setWorklets] = useState<WorkletWithIterations[]>([]);
   const [clusterName, setClusterName] = useState<string>('');
   const [clusterLoading, setClusterLoading] = useState<boolean>(true);
   const [clusterError, setClusterError] = useState<string | null>(null);
@@ -43,7 +43,7 @@ const Index = () => {
   const initTimeoutRef = useRef<number | null>(null);
   // Stores to preserve per-thread progress & worklets when user navigates away
   const [progressStore, setProgressStore] = useState<Record<string, ProgressMessage[]>>({});
-  const [workletsStore, setWorkletsStore] = useState<Record<string, TransformedWorklet[]>>({});
+  const [workletsStore, setWorkletsStore] = useState<Record<string, WorkletWithIterations[]>>({});
   // Keep track of current socket event bindings for cleanup
   const socketCleanupRef = useRef<() => void>(() => { });
 
@@ -338,7 +338,7 @@ const Index = () => {
     };
 
     const fileGeneratedHandler = (data: { worklet: WorkletPayload }) => {
-      const normalized = ensureTransformedWorklet(data.worklet);
+      const normalized = ensureWorkletBundle(data.worklet);
       setWorkletsStore(prev => {
         const existing = prev[id] || [];
         const updated = [...existing, normalized];
@@ -469,25 +469,22 @@ const Index = () => {
     formData.files.forEach((file: File) => body.append('files', file));
 
     try {
-      const data = await requestJson<{ worklets: WorkletPayload[] }>(`${API_URL}/generate`, {
+      await requestJson<{ worklets: WorkletPayload[] }>(`${API_URL}/generate`, {
         method: 'POST',
         body,
       });
-  const normalizedWorklets: TransformedWorklet[] = (data.worklets || []).map(ensureTransformedWorklet);
-      setWorklets(normalizedWorklets);
-      // Mark thread as generated & not local anymore so the progress bar disappears
+      // Mark thread as generated & not local so the progress bar disappears while we refetch canonical data
       setSelectedThread(prev => prev ? {
         ...prev,
         local: false,
         generated: true,
-        worklets: normalizedWorklets.length > 0 ? normalizedWorklets : prev.worklets
       } : prev);
-      setWorkletsStore(prev => ({ ...prev, [newThreadId]: normalizedWorklets }));
       // Hide progress box by marking thread as generated above; do not append more progress UI entries
       setProgressMessages([]);
       stopInitializing();
   fetchThreads(clusterId);
       toast.success('Worklets generated successfully');
+      await fetchThread(newThreadId);
     } catch (error) {
       console.error('Error generating worklets:', error);
       if (error instanceof ApiError) {
@@ -514,8 +511,8 @@ const Index = () => {
     }
   };
 
-  const handleWorkletUpdate = (updatedWorklet: TransformedWorklet) => {
-    let nextWorklets: TransformedWorklet[] = [];
+  const handleWorkletUpdate = (updatedWorklet: WorkletWithIterations) => {
+    let nextWorklets: WorkletWithIterations[] = [];
     setWorklets((prev) => {
       const exists = prev.some((worklet) => worklet.worklet_id === updatedWorklet.worklet_id);
       nextWorklets = exists

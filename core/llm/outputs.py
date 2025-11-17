@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from typing import List
+
 from pydantic import BaseModel, Field
 
 
@@ -28,7 +30,7 @@ class Worklet(BaseModel):
         ...,
         description="Atleast 2 relevant use cases or scenarios addressed by the project idea",
     )
-    deliverables: str = Field(
+    deliverables: List[str] = Field(
         ..., description="Expected deliverables of the project idea"
     )
     kpis: List[str] = Field(

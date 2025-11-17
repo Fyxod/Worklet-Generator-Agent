@@ -20,11 +20,10 @@ _STRING_FIELDS = {
     "description",
     "reasoning",
     "challenge_use_case",
-    "deliverables",
     "infrastructure_requirements",
     "tech_stack",
 }
-_ARRAY_FIELDS = {"kpis", "prerequisites"}
+_ARRAY_FIELDS = {"deliverables", "kpis", "prerequisites"}
 _OBJECT_FIELDS = {"milestones"}
 
 
@@ -49,6 +48,30 @@ def _pick_selected_value(field_payload):
 
     # Fallback: return the payload as-is (could be str/list/dict)
     return deepcopy(field_payload)
+
+
+def _normalize_string_list(raw_value):
+    """Coerce arbitrary input into a list of trimmed, non-empty strings."""
+
+    if raw_value in (None, ""):
+        return []
+    if isinstance(raw_value, list):
+        items = raw_value
+    elif isinstance(raw_value, (tuple, set)):
+        items = list(raw_value)
+    elif isinstance(raw_value, str):
+        items = re.split(r"[\r\n]+|\s*[;\u2022]\s*", raw_value)
+    else:
+        items = [raw_value]
+
+    normalized = []
+    for item in items:
+        if item is None:
+            continue
+        text = str(item).strip()
+        if text:
+            normalized.append(text)
+    return normalized
 
 
 def _normalize_worklet_record(record: dict) -> dict:
@@ -90,8 +113,7 @@ def _normalize_worklet_record(record: dict) -> dict:
     # Arrays
     for f in _ARRAY_FIELDS:
         val = _pick_selected_value(record.get(f))
-        # ensure we return a list for array fields
-        normalized[f] = val if isinstance(val, list) else (val or [])
+        normalized[f] = _normalize_string_list(val)
 
     # Objects
     for f in _OBJECT_FIELDS:
@@ -156,8 +178,8 @@ async def get_thread(thread_id: str):
 
 @router.get("/{thread_id}/download/all/{file_type}")
 async def download_all_worklets(thread_id: str, file_type: str):
-    if file_type not in {"pdf", "ppt"}:
-        raise HTTPException(status_code=400, detail="file_type must be 'pdf' or 'ppt'")
+    if file_type not in {"pdf", "pptx"}:
+        raise HTTPException(status_code=400, detail="file_type must be 'pdf' or 'pptx'")
 
     thread = db.threads.find_one({"thread_id": thread_id})
     if not thread:
@@ -238,8 +260,8 @@ async def download_all_worklets(thread_id: str, file_type: str):
 
 @router.get("/{thread_id}/download/{worklet_id}/{file_type}")
 async def download_worklet(thread_id: str, worklet_id: str, file_type: str):
-    if file_type not in {"pdf", "ppt"}:
-        raise HTTPException(status_code=400, detail="file_type must be 'pdf' or 'ppt'")
+    if file_type not in {"pdf", "pptx"}:
+        raise HTTPException(status_code=400, detail="file_type must be 'pdf' or 'pptx'")
 
     thread = db.threads.find_one({"thread_id": thread_id})
     if not thread:

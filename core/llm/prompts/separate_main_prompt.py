@@ -117,33 +117,38 @@ def problem_generation_prompt(
                 "Return your response as a **valid JSON object**:\n\n"
                 "```json\n"
                 "{\n"
-                "  \"worklets\": [\n"
+                '  "worklets": [\n'
                 "    {\n"
-                "      \"Title\": \"<one-line title>\",\n"
-                "      \"Problem Statement\": \"<28-33 word summary>\",\n"
-                "      \"Description\": \"<context/background, max 100 words>\",\n"
-                "      \"Challenge / Use Case\": \"<specific pain point or scenario>\",\n"
-                "      \"Deliverables\": \"<expected outputs - app, model, system, dataset, etc.>\",\n"
-                "      \"KPIs\": [\n"
-                "        \"<metric 1>\",\n"
-                "        \"<metric 2>\",\n"
-                "        \"<metric 3>\",\n"
-                "        \"<metric 4>\"\n"
+                '      "Title": "<one-line title>",\n'
+                '      "Problem Statement": "<28-33 word summary>",\n'
+                '      "Description": "<context/background, max 100 words>",\n'
+                '      "Challenge / Use Case": "<specific pain point or scenario>",\n'
+                '      "Deliverables": [\n'
+                '        "<expected output such as an app, model, system, dataset, etc.>",\n'
+                '        "<domain-relevant top-tier conferences/journals to target>",\n'
+                '        "<patent or commercialization opportunity>",\n'
+                '        "<any additional deliverable, each as its own concise string>"\n'
                 "      ],\n"
-                "      \"Prerequisites\": [\n"
-                "        \"<prerequisite 1>\",\n"
-                "        \"<prerequisite 2>\",\n"
-                "        \"<prerequisite 3>\",\n"
-                "        \"<prerequisite 4>\",\n"
-                "        \"<prerequisite 5>\",\n"
-                "        \"<prerequisite 6>\"\n"
+                '      "KPIs": [\n'
+                '        "<metric 1>",\n'
+                '        "<metric 2>",\n'
+                '        "<metric 3>",\n'
+                '        "<metric 4>"\n'
                 "      ],\n"
-                "      \"Infrastructure Requirements\": \"<minimum and recommended hardware specs>\",\n"
-                "      \"Tentative Tech Stack\": \"<languages, libraries, platforms, APIs, etc.>\",\n"
-                "      \"Milestones (6 months)\": {\n"
-                "        \"M2\": \"<checkpoint>\",\n"
-                "        \"M4\": \"<checkpoint>\",\n"
-                "        \"M6\": \"<final deliverable>\"\n"
+                '      "Prerequisites": [\n'
+                '        "<prerequisite 1>",\n'
+                '        "<prerequisite 2>",\n'
+                '        "<prerequisite 3>",\n'
+                '        "<prerequisite 4>",\n'
+                '        "<prerequisite 5>",\n'
+                '        "<prerequisite 6>"\n'
+                "      ],\n"
+                '      "Infrastructure Requirements": "<minimum and recommended hardware specs>",\n'
+                '      "Tentative Tech Stack": "<languages, libraries, platforms, APIs, etc.>",\n'
+                '      "Milestones (6 months)": {\n'
+                '        "M2": "<checkpoint>",\n'
+                '        "M4": "<checkpoint>",\n'
+                '        "M6": "<final deliverable>"\n'
                 "      }\n"
                 "    }\n"
                 "  ]\n"

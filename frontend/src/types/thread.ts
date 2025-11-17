@@ -44,7 +44,7 @@ export interface TransformedWorklet {
   /** Transformed challenge use case attribute */
   challenge_use_case: StringAttribute;
   /** Transformed deliverables attribute */
-  deliverables: StringAttribute;
+  deliverables: ArrayAttribute;
   /** Transformed KPIs attribute */
   kpis: ArrayAttribute;
   /** Transformed prerequisites attribute */
@@ -89,7 +89,7 @@ export interface Worklet {
   /** Specific challenge or use case addressed by the project idea */
   challenge_use_case: string;
   /** Expected deliverables of the project idea */
-  deliverables: string;
+  deliverables: string[];
   /** Key Performance Indicators (KPIs) for the project idea */
   kpis: string[];
   /** Prerequisites for undertaking the project idea */

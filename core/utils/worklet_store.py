@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
@@ -12,12 +13,12 @@ STRING_FIELDS: tuple[str, ...] = (
     "problem_statement",
     "description",
     "challenge_use_case",
-    "deliverables",
     "infrastructure_requirements",
     "tech_stack",
 )
 
 ARRAY_FIELDS: tuple[str, ...] = (
+    "deliverables",
     "kpis",
     "prerequisites",
 )
@@ -25,6 +26,32 @@ ARRAY_FIELDS: tuple[str, ...] = (
 OBJECT_FIELDS: tuple[str, ...] = ("milestones",)
 
 ITERATABLE_FIELDS: tuple[str, ...] = STRING_FIELDS + ARRAY_FIELDS + OBJECT_FIELDS
+
+
+def _normalize_array_field(value: Any) -> List[str]:
+    """Coerce raw values into a clean list of non-empty strings."""
+
+    if isinstance(value, list):
+        items = value
+    elif isinstance(value, (tuple, set)):
+        items = list(value)
+    elif isinstance(value, str):
+        # Split on common delimiters while keeping meaningful phrases intact
+        splits = re.split(r"[\r\n]+|\s*[;\u2022]\s*", value)
+        items = [segment for segment in splits if segment is not None]
+    elif value in (None, ""):
+        items = []
+    else:
+        items = [value]
+
+    normalized: List[str] = []
+    for item in items:
+        if item is None:
+            continue
+        text = str(item).strip()
+        if text:
+            normalized.append(text)
+    return normalized
 
 
 def build_initial_iteration(worklet_payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -48,10 +75,10 @@ def build_initial_iteration(worklet_payload: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     for field in ARRAY_FIELDS:
-        value = worklet_payload.get(field) or []
+        value = worklet_payload.get(field)
         iteration[field] = {
             "selected_index": 0,
-            "iterations": [list(value) if isinstance(value, list) else []],
+            "iterations": [_normalize_array_field(value)],
         }
 
     for field in OBJECT_FIELDS:
@@ -138,7 +165,7 @@ def iteration_to_worklet(iteration: Dict[str, Any]) -> Worklet:
         )
 
     for field in ARRAY_FIELDS:
-        payload[field] = (
+        payload[field] = _normalize_array_field(
             extract_iteration_value(iteration[field]) if field in iteration else []
         )
 

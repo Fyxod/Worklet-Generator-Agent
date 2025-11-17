@@ -40,7 +40,7 @@ def build_worklet_enhancement_prompt(
           "description": string,
           "reasoning": string,
           "challenge_use_case": string,
-          "deliverables": string,
+          "deliverables": string[],
           "kpis": string[],
           "prerequisites": string[],
           "infrastructure_requirements": string,

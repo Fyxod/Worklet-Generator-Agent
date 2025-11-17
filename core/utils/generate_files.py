@@ -44,6 +44,32 @@ def ensure_list(value: Any) -> List:
     return [value]
 
 
+def normalize_text_list(value: Any) -> List[str]:
+    """Convert raw values into a list of trimmed, non-empty strings."""
+
+    candidates = ensure_list(value)
+    normalized: List[str] = []
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        if isinstance(candidate, str):
+            segments = re.split(r"[\r\n]+|\s*[;\u2022]\s*", candidate)
+            parts = [
+                segment.strip() for segment in segments if segment and segment.strip()
+            ]
+            if parts:
+                normalized.extend(parts)
+                continue
+            text = candidate.strip()
+            if text:
+                normalized.append(text)
+        else:
+            text = str(candidate).strip()
+            if text:
+                normalized.append(text)
+    return normalized
+
+
 def safe_get(obj: Any, keys: Sequence[str], default: Any = None) -> Any:
     """
     Safely retrieve the first non-empty value from obj for any of the provided keys.
@@ -113,10 +139,10 @@ FIELD_KEYS = {
 # ---------------------------
 async def generate_file(worklet: Worklet, thread_id: str) -> None:
     """
-    Entrypoint to generate both PDF and PPT for a worklet.
+    Entrypoint to generate both PDF and PPTX for a worklet.
     Accepts either a Pydantic Worklet instance or a legacy dict-like worklet.
     """
-    ppt_path = os.path.join("data/threads", thread_id, "generated_worklets/ppt")
+    ppt_path = os.path.join("data/threads", thread_id, "generated_worklets/pptx")
     pdf_path = os.path.join("data/threads", thread_id, "generated_worklets/pdf")
     os.makedirs(ppt_path, exist_ok=True)
     os.makedirs(pdf_path, exist_ok=True)
@@ -195,31 +221,30 @@ def create_pdf(filename: str, worklet: Worklet, in_memory: bool = False):
             )
             elements.append(Spacer(1, 6))
 
-        deliverables = safe_get(worklet, FIELD_KEYS["deliverables"])
+        raw_deliverables = safe_get(worklet, FIELD_KEYS["deliverables"])
+        deliverables = normalize_text_list(raw_deliverables)
         if deliverables:
-            elements.append(
-                Paragraph(f"<b>Deliverables:</b> {deliverables}", normal_style)
-            )
+            elements.append(Paragraph("<b>Deliverables:</b>", normal_style))
+            for item in deliverables:
+                elements.append(Paragraph(f"• {item}", bullet_style))
             elements.append(Spacer(1, 6))
 
         # KPIs (list)
         raw_kpis = safe_get(worklet, FIELD_KEYS["kpis"])
-        kpis = ensure_list(raw_kpis)
+        kpis = normalize_text_list(raw_kpis)
         if kpis:
             elements.append(Paragraph("<b>KPIs:</b>", normal_style))
             for kpi in kpis:
-                if kpi is not None and str(kpi).strip():
-                    elements.append(Paragraph(f"• {str(kpi)}", bullet_style))
+                elements.append(Paragraph(f"• {kpi}", bullet_style))
             elements.append(Spacer(1, 6))
 
         # Prerequisites (list)
         raw_prereqs = safe_get(worklet, FIELD_KEYS["prerequisites"])
-        prereqs = ensure_list(raw_prereqs)
+        prereqs = normalize_text_list(raw_prereqs)
         if prereqs:
             elements.append(Paragraph("<b>Prerequisites:</b>", normal_style))
             for prereq in prereqs:
-                if prereq is not None and str(prereq).strip():
-                    elements.append(Paragraph(f"• {str(prereq)}", bullet_style))
+                elements.append(Paragraph(f"• {prereq}", bullet_style))
             elements.append(Spacer(1, 6))
 
         # Infra & Tech Stack
@@ -388,7 +413,6 @@ def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
             "problem_statement",
             "description",
             "challenge_use_case",
-            "deliverables",
         ):
             text = _text_for(FIELD_KEYS[field_key])
             if text:
@@ -415,11 +439,38 @@ def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
                     p.font.size = Pt(14)
                     top += est_h + gap
 
+        # Deliverables (list)
+        raw_deliverables = safe_get(worklet, FIELD_KEYS["deliverables"])
+        deliverables = normalize_text_list(raw_deliverables)
+        if deliverables:
+            deliverables_text = "\n".join([f"• {item}" for item in deliverables])
+            if deliverables_text:
+                try:
+                    est_h = estimate_height_wrapped_content(deliverables_text)
+                    _ensure_space(est_h + gap)
+                    top = add_textbox(slide, "Deliverables", deliverables_text, top)
+                except NameError:
+                    est_h = min(2.0, 0.3 * len(deliverables) + 0.2)
+                    _ensure_space(est_h + gap)
+                    left = Inches(0.5)
+                    top_inch = Inches(top)
+                    width = Inches(9.5)
+                    height = Inches(est_h)
+                    tb = slide.shapes.add_textbox(left, top_inch, width, height)
+                    tf = tb.text_frame
+                    tf.clear()
+                    for index, item in enumerate(deliverables):
+                        paragraph = (
+                            tf.paragraphs[0] if index == 0 else tf.add_paragraph()
+                        )
+                        paragraph.text = f"• {item}"
+                    top += est_h + gap
+
         # KPIs (list)
         raw_kpis = safe_get(worklet, FIELD_KEYS["kpis"])
-        kpis = ensure_list(raw_kpis)
+        kpis = normalize_text_list(raw_kpis)
         if kpis:
-            kpi_text = "\n".join([f"• {str(k)}" for k in kpis if k not in (None, "")])
+            kpi_text = "\n".join([f"• {k}" for k in kpis])
             if kpi_text:
                 try:
                     est_h = estimate_height_wrapped_content(kpi_text)
@@ -446,11 +497,9 @@ def create_ppt(output_filename: str, worklet: Worklet, in_memory: bool = False):
 
         # Prerequisites (list)
         raw_prereqs = safe_get(worklet, FIELD_KEYS["prerequisites"])
-        prereqs = ensure_list(raw_prereqs)
+        prereqs = normalize_text_list(raw_prereqs)
         if prereqs:
-            preq_text = "\n".join(
-                [f"• {str(p)}" for p in prereqs if p not in (None, "")]
-            )
+            preq_text = "\n".join([f"• {p}" for p in prereqs])
             if preq_text:
                 try:
                     est_h = estimate_height_wrapped_content(preq_text)

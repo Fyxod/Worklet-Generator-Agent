@@ -33,7 +33,7 @@ class Worklet(BaseModel):
     challenge_use_case: str = Field(
         ..., description="Specific challenge or use case addressed by the project idea"
     )
-    deliverables: str = Field(
+    deliverables: List[str] = Field(
         ..., description="Expected deliverables of the project idea"
     )
     kpis: List[str] = Field(
@@ -94,7 +94,7 @@ class TransformedWorklet(BaseModel):
     challenge_use_case: StringAttribute = Field(
         ..., description="Transformed challenge use case attribute"
     )
-    deliverables: StringAttribute = Field(
+    deliverables: ArrayAttribute = Field(
         ..., description="Transformed deliverables attribute"
     )
     kpis: ArrayAttribute = Field(..., description="Transformed KPIs attribute")

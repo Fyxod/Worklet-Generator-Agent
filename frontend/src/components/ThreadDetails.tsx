@@ -81,7 +81,7 @@ const FIELD_CONFIGS: FieldConfig[] = [
   { key: 'problem_statement', label: 'Problem Statement', type: 'string' },
   { key: 'description', label: 'Description', type: 'string' },
   { key: 'challenge_use_case', label: 'Challenge / Use Case', type: 'string' },
-  { key: 'deliverables', label: 'Deliverables', type: 'string' },
+  { key: 'deliverables', label: 'Deliverables', type: 'array' },
   { key: 'kpis', label: 'KPIs', type: 'array' },
   { key: 'prerequisites', label: 'Prerequisites', type: 'array' },
   {
@@ -205,7 +205,7 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }
     return safe.length > 0 ? safe : 'worklet';
   };
 
-  const handleDownload = async (type: 'pdf' | 'ppt') => {
+  const handleDownload = async (type: 'pdf' | 'pptx') => {
     if (!activeWorklet) return;
     try {
       const blob = await requestBlob(
@@ -230,7 +230,7 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }
     }
   };
 
-  const handleDownloadAll = async (type: 'pdf' | 'ppt') => {
+  const handleDownloadAll = async (type: 'pdf' | 'pptx') => {
     try {
       const response = await fetch(`${API_URL}/thread/${thread.thread_id}/download/all/${type}`);
       await ensureOk(response);
@@ -563,8 +563,8 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }
                 <DropdownMenuItem onClick={() => handleDownloadAll('pdf')}>
                   PDF (All)
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleDownloadAll('ppt')}>
-                  PPT (All)
+                <DropdownMenuItem onClick={() => handleDownloadAll('pptx')}>
+                  PPTX (All)
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -573,15 +573,19 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {worklets.map((worklet) => {
               const iteration = getDefaultWorkletIteration(worklet);
+              const rawTitle = getStringIteration(iteration.title);
+              const buttonTitle = rawTitle.trim().length > 0 ? rawTitle : 'Untitled Worklet';
               return (
                 <Button
                   key={worklet.worklet_id}
                   variant="outline"
-                  className="justify-start border-border transition-colors hover:border-primary"
+                  className="h-auto justify-start border-border transition-colors hover:border-primary whitespace-normal py-3 text-left"
                   onClick={() => handleOpenWorklet(worklet)}
                 >
                   <FileIcon className="mr-2 h-4 w-4" />
-                  {getStringIteration(iteration.title)}
+                  <span className="text-left [overflow-wrap:anywhere]">
+                    {buttonTitle}
+                  </span>
                 </Button>
               );
             })}
@@ -780,8 +784,8 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }
                 <Button variant="outline" onClick={() => handleDownload('pdf')} disabled={isIterating || isEnhancing}>
                   <Download className="mr-1 h-4 w-4" /> PDF
                 </Button>
-                <Button onClick={() => handleDownload('ppt')} disabled={isIterating || isEnhancing}>
-                  <Download className="mr-1 h-4 w-4" /> PPT
+                <Button onClick={() => handleDownload('pptx')} disabled={isIterating || isEnhancing}>
+                  <Download className="mr-1 h-4 w-4" /> PPTX
                 </Button>
               </div>
             </>

@@ -145,7 +145,10 @@ thread_schema = {
                                             "selected_index": {"bsonType": "int"},
                                             "iterations": {
                                                 "bsonType": "array",
-                                                "items": {"bsonType": "string"},
+                                                "items": {
+                                                    "bsonType": "array",
+                                                    "items": {"bsonType": "string"},
+                                                },
                                             },
                                         },
                                     },

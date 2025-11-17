@@ -61,7 +61,7 @@ def worklet_generation_prompt(
                 "4. **Freshness:**\n"
                 "   - Highlight 2025-or-newer tools, models, frameworks, datasets, and benchmarks\n"
                 "   - Avoid deprecated or outdated approaches\n\n"
-                "5. **Structure:** Return valid JSON following the schema below. All text must be plain strings without markdown or commentary.\n\n"
+                "5. **Structure:** Return valid JSON following the schema below. All text must be plain strings without markdown or commentary. Represent deliverables as an array of strings (no embedded newline characters).\n\n"
                 "```json\n"
                 "{\n"
                 '  "worklets": [\n'
@@ -71,16 +71,21 @@ def worklet_generation_prompt(
                 '      "description": "<context/background up to 100 words>",\n'
                 '      "reasoning": "<LLM rationale behind proposing this idea, including how it relates to current SOTA>",\n'
                 '      "challenge_use_case": "<At least 2 relevant use cases or scenarios>",\n'
-                '      "deliverables": "<List each deliverable on a separate line using newline characters (\\n). Include: expected outputs (app, model, system, dataset, etc.), domain-relevant top-tier international conferences/journals (e.g., NeurIPS, CVPR, ACL, ICML, IEEE journals), and patent possibilities. Each deliverable should be on its own line for clarity.>",\n'
-                '      "kpis": "For each KPI specify: (1) Metric name and what it measures, (2) Target value for this project, (3) Current SOTA baseline value with source/reference if available, (4) Detailed reasoning explaining why this target is ambitious yet achievable and how it compares to SOTA.>",\n'
-                '      "prerequisites": ["<prereq 1>", "<prereq 2>", "<prereq 3>", "<prereq 4>", "<prereq 5>", "<prereq 6>"],\n'
+                '      "deliverables": [\n'
+                '        "<Expected output such as app, model, system, dataset, etc.>",\n'
+                '        "<Domain-relevant top-tier international conferences/journals to target (e.g., NeurIPS, CVPR, ACL, ICML, IEEE journals)>",\n'
+                '        "<Patent or commercialization opportunity>",\n'
+                '        "<Any additional deliverable>"\n'
+                "      ],\n"
+                '      "kpis": ["<kpi 1>", "<kpi 2>", "<kpi 3>"...]"<Array of strings with a minimum of 6-7 kpi strings with each string in the following format - "Name: <Metric name>; Measure: <What it measures>; Target: <Target value for this project>; SOTA baseline: <Current SOTA baseline value with source/reference if available>; Reasoning: <Detailed reasoning explaining why this target is ambitious yet achievable and how it compares to SOTA>">",\n'
+                '      "prerequisites": ["<prereq 1>", "<prereq 2>", "<prereq 3>", "<prereq 4>", "<prereq 5>", "<prereq 6>"...],\n'
                 '      "infrastructure_requirements": "<hardware resources required>",\n'
                 '      "tech_stack": "<languages, libraries, APIs, frameworks>",\n'
                 '      "milestones": <example output: {"M2": "<checkpoint>", "M4": "<checkpoint>", "M6": "<final deliverable>"}>\n'
                 "    }\n"
                 "  ]\n"
                 "}\n"
-                "```"
+                "```\n"
             ),
         }
     )
