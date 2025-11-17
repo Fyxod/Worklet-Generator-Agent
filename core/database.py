@@ -64,146 +64,170 @@ thread_schema = {
                     "bsonType": "object",
                     "required": [
                         "worklet_id",
-                        "title",
-                        "problem_statement",
-                        "description",
-                        "challenge_use_case",
-                        "deliverables",
-                        "kpis",
-                        "prerequisites",
-                        "infrastructure_requirements",
-                        "tech_stack",
-                        "milestones",
-                        "references",
+                        "selected_iteration_index",
+                        "iterations",
                     ],
                     "properties": {
                         "worklet_id": {"bsonType": "string"},
-                        "title": {
-                            "bsonType": "object",
-                            "required": ["selected_index", "iterations"],
-                            "properties": {
-                                "selected_index": {"bsonType": "int"},
-                                "iterations": {
-                                    "bsonType": "array",
-                                    "items": {"bsonType": "string"},
-                                },
-                            },
-                        },
-                        "problem_statement": {
-                            "bsonType": "object",
-                            "required": ["selected_index", "iterations"],
-                            "properties": {
-                                "selected_index": {"bsonType": "int"},
-                                "iterations": {
-                                    "bsonType": "array",
-                                    "items": {"bsonType": "string"},
-                                },
-                            },
-                        },
-                        "description": {
-                            "bsonType": "object",
-                            "required": ["selected_index", "iterations"],
-                            "properties": {
-                                "selected_index": {"bsonType": "int"},
-                                "iterations": {
-                                    "bsonType": "array",
-                                    "items": {"bsonType": "string"},
-                                },
-                            },
-                        },
-                        "challenge_use_case": {
-                            "bsonType": "object",
-                            "required": ["selected_index", "iterations"],
-                            "properties": {
-                                "selected_index": {"bsonType": "int"},
-                                "iterations": {
-                                    "bsonType": "array",
-                                    "items": {"bsonType": "string"},
-                                },
-                            },
-                        },
-                        "deliverables": {
-                            "bsonType": "object",
-                            "required": ["selected_index", "iterations"],
-                            "properties": {
-                                "selected_index": {"bsonType": "int"},
-                                "iterations": {
-                                    "bsonType": "array",
-                                    "items": {"bsonType": "string"},
-                                },
-                            },
-                        },
-                        "kpis": {
-                            "bsonType": "object",
-                            "required": ["selected_index", "iterations"],
-                            "properties": {
-                                "selected_index": {"bsonType": "int"},
-                                "iterations": {
-                                    "bsonType": "array",
-                                    "items": {
-                                        "bsonType": "array",
-                                        "items": {"bsonType": "string"},
-                                    },
-                                },
-                            },
-                        },
-                        "prerequisites": {
-                            "bsonType": "object",
-                            "required": ["selected_index", "iterations"],
-                            "properties": {
-                                "selected_index": {"bsonType": "int"},
-                                "iterations": {
-                                    "bsonType": "array",
-                                    "items": {
-                                        "bsonType": "array",
-                                        "items": {"bsonType": "string"},
-                                    },
-                                },
-                            },
-                        },
-                        "infrastructure_requirements": {
-                            "bsonType": "object",
-                            "required": ["selected_index", "iterations"],
-                            "properties": {
-                                "selected_index": {"bsonType": "int"},
-                                "iterations": {
-                                    "bsonType": "array",
-                                    "items": {"bsonType": "string"},
-                                },
-                            },
-                        },
-                        "tech_stack": {
-                            "bsonType": "object",
-                            "required": ["selected_index", "iterations"],
-                            "properties": {
-                                "selected_index": {"bsonType": "int"},
-                                "iterations": {
-                                    "bsonType": "array",
-                                    "items": {"bsonType": "string"},
-                                },
-                            },
-                        },
-                        "milestones": {
-                            "bsonType": "object",
-                            "required": ["selected_index", "iterations"],
-                            "properties": {
-                                "selected_index": {"bsonType": "int"},
-                                "iterations": {
-                                    "bsonType": "array",
-                                    "items": {"bsonType": "object"},
-                                },
-                            },
-                        },
-                        "references": {
+                        "selected_iteration_index": {"bsonType": "int"},
+                        "iterations": {
                             "bsonType": "array",
                             "items": {
                                 "bsonType": "object",
-                                "required": ["title", "link", "description", "tag"],
+                                "required": [
+                                    "iteration_id",
+                                    "created_at",
+                                    "title",
+                                    "problem_statement",
+                                    "description",
+                                    "challenge_use_case",
+                                    "deliverables",
+                                    "kpis",
+                                    "prerequisites",
+                                    "infrastructure_requirements",
+                                    "tech_stack",
+                                    "milestones",
+                                    "references",
+                                ],
                                 "properties": {
-                                    "title": {"bsonType": "string"},
-                                    "link": {"bsonType": "string"},
-                                    "description": {"bsonType": "string"},
-                                    "tag": {"bsonType": "string"},
+                                    "iteration_id": {"bsonType": "string"},
+                                    "created_at": {"bsonType": "date"},
+                                    "worklet_id": {"bsonType": "string"},
+                                    "reasoning": {"bsonType": ["string", "null"]},
+                                    "title": {
+                                        "bsonType": "object",
+                                        "required": ["selected_index", "iterations"],
+                                        "properties": {
+                                            "selected_index": {"bsonType": "int"},
+                                            "iterations": {
+                                                "bsonType": "array",
+                                                "items": {"bsonType": "string"},
+                                            },
+                                        },
+                                    },
+                                    "problem_statement": {
+                                        "bsonType": "object",
+                                        "required": ["selected_index", "iterations"],
+                                        "properties": {
+                                            "selected_index": {"bsonType": "int"},
+                                            "iterations": {
+                                                "bsonType": "array",
+                                                "items": {"bsonType": "string"},
+                                            },
+                                        },
+                                    },
+                                    "description": {
+                                        "bsonType": "object",
+                                        "required": ["selected_index", "iterations"],
+                                        "properties": {
+                                            "selected_index": {"bsonType": "int"},
+                                            "iterations": {
+                                                "bsonType": "array",
+                                                "items": {"bsonType": "string"},
+                                            },
+                                        },
+                                    },
+                                    "challenge_use_case": {
+                                        "bsonType": "object",
+                                        "required": ["selected_index", "iterations"],
+                                        "properties": {
+                                            "selected_index": {"bsonType": "int"},
+                                            "iterations": {
+                                                "bsonType": "array",
+                                                "items": {"bsonType": "string"},
+                                            },
+                                        },
+                                    },
+                                    "deliverables": {
+                                        "bsonType": "object",
+                                        "required": ["selected_index", "iterations"],
+                                        "properties": {
+                                            "selected_index": {"bsonType": "int"},
+                                            "iterations": {
+                                                "bsonType": "array",
+                                                "items": {"bsonType": "string"},
+                                            },
+                                        },
+                                    },
+                                    "kpis": {
+                                        "bsonType": "object",
+                                        "required": ["selected_index", "iterations"],
+                                        "properties": {
+                                            "selected_index": {"bsonType": "int"},
+                                            "iterations": {
+                                                "bsonType": "array",
+                                                "items": {
+                                                    "bsonType": "array",
+                                                    "items": {"bsonType": "string"},
+                                                },
+                                            },
+                                        },
+                                    },
+                                    "prerequisites": {
+                                        "bsonType": "object",
+                                        "required": ["selected_index", "iterations"],
+                                        "properties": {
+                                            "selected_index": {"bsonType": "int"},
+                                            "iterations": {
+                                                "bsonType": "array",
+                                                "items": {
+                                                    "bsonType": "array",
+                                                    "items": {"bsonType": "string"},
+                                                },
+                                            },
+                                        },
+                                    },
+                                    "infrastructure_requirements": {
+                                        "bsonType": "object",
+                                        "required": ["selected_index", "iterations"],
+                                        "properties": {
+                                            "selected_index": {"bsonType": "int"},
+                                            "iterations": {
+                                                "bsonType": "array",
+                                                "items": {"bsonType": "string"},
+                                            },
+                                        },
+                                    },
+                                    "tech_stack": {
+                                        "bsonType": "object",
+                                        "required": ["selected_index", "iterations"],
+                                        "properties": {
+                                            "selected_index": {"bsonType": "int"},
+                                            "iterations": {
+                                                "bsonType": "array",
+                                                "items": {"bsonType": "string"},
+                                            },
+                                        },
+                                    },
+                                    "milestones": {
+                                        "bsonType": "object",
+                                        "required": ["selected_index", "iterations"],
+                                        "properties": {
+                                            "selected_index": {"bsonType": "int"},
+                                            "iterations": {
+                                                "bsonType": "array",
+                                                "items": {"bsonType": "object"},
+                                            },
+                                        },
+                                    },
+                                    "references": {
+                                        "bsonType": "array",
+                                        "items": {
+                                            "bsonType": "object",
+                                            "required": [
+                                                "title",
+                                                "link",
+                                                "description",
+                                                "tag",
+                                            ],
+                                            "properties": {
+                                                "title": {"bsonType": "string"},
+                                                "link": {"bsonType": "string"},
+                                                "description": {"bsonType": "string"},
+                                                "tag": {"bsonType": "string"},
+                                            },
+                                        },
+                                    },
                                 },
                             },
                         },

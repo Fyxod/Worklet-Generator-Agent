@@ -12,13 +12,16 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
   ArrayAttribute,
+  EnhanceWorkletResponse,
   IterateWorkletResponse,
   ObjectAttribute,
   SelectIterationResponse,
+  SelectWorkletIterationResponse,
   StringAttribute,
   Thread,
-  TransformedWorklet,
   WorkletFieldKey,
+  WorkletIteration,
+  WorkletWithIterations,
 } from '@/types/thread';
 import {
   Dialog,
@@ -45,18 +48,23 @@ import {
 } from '@/lib/http';
 import {
   clampToIterations,
-  ensureTransformedWorklet,
+  clampWorkletIterationIndex,
+  ensureWorkletBundle,
+  ensureWorkletIteration,
   getArrayIteration,
+  getDefaultWorkletIteration,
   getIterationCount,
   getObjectIteration,
   getSelectedIndex,
   getStringIteration,
+  getWorkletIterationAt,
+  getWorkletIterationCount,
 } from '@/lib/worklet';
 
 interface ThreadDetailsProps {
   thread: Thread;
-  worklets: TransformedWorklet[];
-  onUpdateWorklet: (worklet: TransformedWorklet) => void;
+  worklets: WorkletWithIterations[];
+  onUpdateWorklet: (worklet: WorkletWithIterations) => void;
   clusterName?: string;
 }
 
@@ -85,7 +93,7 @@ const FIELD_CONFIGS: FieldConfig[] = [
   { key: 'milestones', label: 'Milestones', type: 'object' },
 ];
 
-const DEFAULT_PROMPT_STATE = {
+const DEFAULT_FIELD_PROMPT_STATE = {
   open: false,
   field: null as WorkletFieldKey | null,
   prompt: '',
@@ -93,28 +101,31 @@ const DEFAULT_PROMPT_STATE = {
 };
 
 const computeInitialIndices = (
-  worklet: TransformedWorklet,
+  iteration: WorkletIteration,
 ): Record<WorkletFieldKey, number> => {
   return FIELD_CONFIGS.reduce((acc, field) => {
-    const attr = worklet[field.key];
+    const attr = iteration[field.key];
     acc[field.key] = getSelectedIndex(attr);
     return acc;
   }, {} as Record<WorkletFieldKey, number>);
 };
 
 const getAttribute = (
-  worklet: TransformedWorklet,
+  iteration: WorkletIteration,
   key: WorkletFieldKey,
-): StringAttribute | ArrayAttribute | ObjectAttribute => {
-  return worklet[key];
-};
+): StringAttribute | ArrayAttribute | ObjectAttribute => iteration[key];
 
 export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }: ThreadDetailsProps) => {
   const [activeWorkletId, setActiveWorkletId] = useState<string | null>(null);
+  const [activeIterationIndex, setActiveIterationIndex] = useState(0);
   const [fieldViewIndices, setFieldViewIndices] = useState<Record<WorkletFieldKey, number>>({} as Record<WorkletFieldKey, number>);
   const [selectingField, setSelectingField] = useState<WorkletFieldKey | null>(null);
   const [iteratingField, setIteratingField] = useState<WorkletFieldKey | null>(null);
-  const [promptState, setPromptState] = useState(DEFAULT_PROMPT_STATE);
+  const [fieldPromptState, setFieldPromptState] = useState(DEFAULT_FIELD_PROMPT_STATE);
+  const [enhanceDialogOpen, setEnhanceDialogOpen] = useState(false);
+  const [enhancePrompt, setEnhancePrompt] = useState('');
+  const [isEnhancing, setIsEnhancing] = useState(false);
+  const [defaultSelecting, setDefaultSelecting] = useState(false);
 
   const activeWorklet = useMemo(
     () => worklets.find((w) => w.worklet_id === activeWorkletId) ?? null,
@@ -123,44 +134,69 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }
 
   useEffect(() => {
     if (!activeWorklet) {
+      setActiveIterationIndex(0);
       setFieldViewIndices({} as Record<WorkletFieldKey, number>);
       return;
     }
-    setFieldViewIndices(computeInitialIndices(activeWorklet));
-  }, [activeWorklet?.worklet_id]);
+
+    const defaultIndex = clampWorkletIterationIndex(
+      activeWorklet,
+      activeWorklet.selected_iteration_index,
+    );
+    setActiveIterationIndex(defaultIndex);
+  }, [activeWorklet?.worklet_id, activeWorklet?.selected_iteration_index]);
+
+  const activeIteration = useMemo(() => {
+    if (!activeWorklet) return null;
+    return getWorkletIterationAt(activeWorklet, activeIterationIndex);
+  }, [activeWorklet, activeIterationIndex]);
+
+  useEffect(() => {
+    if (!activeIteration) return;
+    setFieldViewIndices(computeInitialIndices(activeIteration));
+  }, [activeIteration?.iteration_id]);
 
   const isDialogOpen = Boolean(activeWorklet);
   const isIterating = iteratingField !== null;
 
+  const totalWorkletIterations = activeWorklet ? getWorkletIterationCount(activeWorklet) : 0;
+
   const getViewIndex = (key: WorkletFieldKey): number => {
-    if (!activeWorklet) return 0;
-    const attr = getAttribute(activeWorklet, key);
+    if (!activeIteration) return 0;
+    const attr = getAttribute(activeIteration, key);
     const fallback = getSelectedIndex(attr);
     const requested = fieldViewIndices[key];
     return clampToIterations(attr, typeof requested === 'number' ? requested : fallback);
   };
 
-  const closePrompt = () => {
+  const closeFieldPrompt = () => {
     if (isIterating) return;
-    setPromptState(DEFAULT_PROMPT_STATE);
+    setFieldPromptState(DEFAULT_FIELD_PROMPT_STATE);
   };
 
   const handleDialogOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
-      if (isIterating) return;
+      if (isIterating || isEnhancing) return;
       setActiveWorkletId(null);
-      setPromptState(DEFAULT_PROMPT_STATE);
+      setFieldPromptState(DEFAULT_FIELD_PROMPT_STATE);
+      setEnhanceDialogOpen(false);
+      setEnhancePrompt('');
     }
   };
 
-  const handleOpenWorklet = (worklet: TransformedWorklet) => {
+  const handleOpenWorklet = (worklet: WorkletWithIterations) => {
     setActiveWorkletId(worklet.worklet_id);
+    const defaultIndex = clampWorkletIterationIndex(
+      worklet,
+      worklet.selected_iteration_index,
+    );
+    setActiveIterationIndex(defaultIndex);
   };
 
   const getActiveTitle = (): string => {
-    if (!activeWorklet) return '';
+    if (!activeIteration) return '';
     const index = getViewIndex('title');
-    const value = getStringIteration(activeWorklet.title, index).trim();
+    const value = getStringIteration(activeIteration.title, index).trim();
     return value.length > 0 ? value : 'Worklet';
   };
 
@@ -225,9 +261,9 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }
     }
   };
 
-  const handleNavigate = (field: WorkletFieldKey, delta: number) => {
-    if (!activeWorklet) return;
-    const attr = getAttribute(activeWorklet, field);
+  const handleNavigateField = (field: WorkletFieldKey, delta: number) => {
+    if (!activeIteration) return;
+    const attr = getAttribute(activeIteration, field);
     const total = getIterationCount(attr);
     if (total <= 1) return;
     const current = getViewIndex(field);
@@ -236,15 +272,16 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }
     setFieldViewIndices((prev) => ({ ...prev, [field]: next }));
   };
 
-  const handleSelectIteration = async (field: WorkletFieldKey, index: number) => {
-    if (!activeWorklet) return;
-    const attr = getAttribute(activeWorklet, field);
+  const handleSelectFieldIteration = async (field: WorkletFieldKey, index: number) => {
+    if (!activeWorklet || !activeIteration) return;
+    const attr = getAttribute(activeIteration, field);
     const selected = getSelectedIndex(attr);
     if (index === selected) return;
     setSelectingField(field);
     try {
       const payload = {
         worklet_id: activeWorklet.worklet_id,
+        worklet_iteration_id: activeIteration.iteration_id,
         field,
         selected_index: index,
       };
@@ -254,13 +291,20 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }
         body: JSON.stringify(payload),
       });
 
-      const updatedWorklet = ensureTransformedWorklet({
-        ...activeWorklet,
+      const updatedIteration: WorkletIteration = {
+        ...activeIteration,
         [field]: {
           ...attr,
           selected_index: index,
         },
-      } as TransformedWorklet);
+      };
+
+      const updatedWorklet = ensureWorkletBundle({
+        ...activeWorklet,
+        iterations: activeWorklet.iterations.map((iteration) =>
+          iteration.iteration_id === activeIteration.iteration_id ? updatedIteration : iteration,
+        ),
+      });
 
       onUpdateWorklet(updatedWorklet);
       setFieldViewIndices((prev) => ({ ...prev, [field]: index }));
@@ -277,25 +321,26 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }
     }
   };
 
-  const handleOpenPrompt = (field: WorkletFieldKey, index: number) => {
+  const handleOpenFieldPrompt = (field: WorkletFieldKey, index: number) => {
     if (isIterating) return;
-    setPromptState({ open: true, field, prompt: '', iterationIndex: index });
+    setFieldPromptState({ open: true, field, prompt: '', iterationIndex: index });
   };
 
-  const handlePromptSubmit = async () => {
-    if (!activeWorklet || !promptState.field) return;
-    const trimmed = promptState.prompt.trim();
+  const handleFieldPromptSubmit = async () => {
+    if (!activeWorklet || !activeIteration || !fieldPromptState.field) return;
+    const trimmed = fieldPromptState.prompt.trim();
     if (!trimmed) {
       toast.error('Please enter a prompt to iterate this field');
       return;
     }
 
-    setIteratingField(promptState.field);
+    setIteratingField(fieldPromptState.field);
     try {
       const payload = {
         worklet_id: activeWorklet.worklet_id,
-        field: promptState.field,
-        index: promptState.iterationIndex,
+        worklet_iteration_id: activeIteration.iteration_id,
+        field: fieldPromptState.field,
+        index: fieldPromptState.iterationIndex,
         prompt: trimmed,
       };
 
@@ -305,23 +350,30 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }
         body: JSON.stringify(payload),
       });
 
-      const attr = getAttribute(activeWorklet, promptState.field);
-      const updatedWorklet = ensureTransformedWorklet({
-        ...activeWorklet,
-        [promptState.field]: {
+      const attr = getAttribute(activeIteration, fieldPromptState.field);
+      const updatedIteration: WorkletIteration = {
+        ...activeIteration,
+        [fieldPromptState.field]: {
           ...attr,
           selected_index: response.selected_index,
           iterations: response.iterations as any,
         },
-      } as TransformedWorklet);
+      };
+
+      const updatedWorklet = ensureWorkletBundle({
+        ...activeWorklet,
+        iterations: activeWorklet.iterations.map((iteration) =>
+          iteration.iteration_id === activeIteration.iteration_id ? updatedIteration : iteration,
+        ),
+      });
 
       onUpdateWorklet(updatedWorklet);
       setFieldViewIndices((prev) => ({
         ...prev,
-        [promptState.field as WorkletFieldKey]: response.selected_index,
+        [fieldPromptState.field as WorkletFieldKey]: response.selected_index,
       }));
       toast.success('Iteration applied');
-      setPromptState(DEFAULT_PROMPT_STATE);
+      setFieldPromptState(DEFAULT_FIELD_PROMPT_STATE);
     } catch (error) {
       console.error(error);
       if (error instanceof ApiError) {
@@ -331,6 +383,100 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }
       }
     } finally {
       setIteratingField(null);
+    }
+  };
+
+  const handleIterationNavigate = (delta: number) => {
+    if (!activeWorklet) return;
+    if (totalWorkletIterations <= 1) return;
+    const next = clampWorkletIterationIndex(activeWorklet, activeIterationIndex + delta);
+    if (next === activeIterationIndex) return;
+    setActiveIterationIndex(next);
+  };
+
+  const handleSelectDefaultIteration = async () => {
+    if (!activeWorklet || !activeIteration) return;
+    const currentDefault = getWorkletIterationAt(activeWorklet, activeWorklet.selected_iteration_index);
+    if (currentDefault.iteration_id === activeIteration.iteration_id) {
+      return;
+    }
+    setDefaultSelecting(true);
+    try {
+      const response = await requestJson<SelectWorkletIterationResponse>(
+        `${API_URL}/worklet-iterations/select-default`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            worklet_id: activeWorklet.worklet_id,
+            worklet_iteration_id: activeIteration.iteration_id,
+          }),
+        },
+      );
+
+      const updatedWorklet = ensureWorkletBundle({
+        ...activeWorklet,
+        selected_iteration_index: response.selected_iteration_index,
+      });
+
+      onUpdateWorklet(updatedWorklet);
+      setActiveIterationIndex(response.selected_iteration_index);
+      toast.success('Default worklet iteration updated');
+    } catch (error) {
+      console.error(error);
+      if (error instanceof ApiError) {
+        toast.error(error.message ?? 'Failed to update default iteration');
+      } else {
+        toast.error(error instanceof Error ? error.message : 'Failed to update default iteration');
+      }
+    } finally {
+      setDefaultSelecting(false);
+    }
+  };
+
+  const handleEnhanceSubmit = async () => {
+    if (!activeWorklet || !activeIteration) return;
+    const trimmed = enhancePrompt.trim();
+    if (!trimmed) {
+      toast.error('Please provide a prompt to enhance the worklet');
+      return;
+    }
+    setIsEnhancing(true);
+    try {
+      const response = await requestJson<EnhanceWorkletResponse>(
+        `${API_URL}/worklet-iterations/enhance`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            worklet_id: activeWorklet.worklet_id,
+            worklet_iteration_id: activeIteration.iteration_id,
+            prompt: trimmed,
+          }),
+        },
+      );
+
+      const newIteration = ensureWorkletIteration(response.iteration as any);
+      const updatedWorklet = ensureWorkletBundle({
+        ...activeWorklet,
+        iterations: [...activeWorklet.iterations, newIteration],
+        selected_iteration_index: response.selected_iteration_index,
+      });
+
+      onUpdateWorklet(updatedWorklet);
+      setActiveIterationIndex(response.selected_iteration_index);
+      setEnhancePrompt('');
+      setEnhanceDialogOpen(false);
+      toast.success('Worklet enhanced');
+    } catch (error) {
+      console.error(error);
+      if (error instanceof ApiError) {
+        toast.error(error.message ?? 'Enhancement failed');
+      } else {
+        toast.error(error instanceof Error ? error.message : 'Enhancement failed');
+      }
+    } finally {
+      setIsEnhancing(false);
     }
   };
 
@@ -407,7 +553,7 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h3 className="text-xl font-semibold text-foreground">Generated Files</h3>
             <DropdownMenu>
-                <DropdownMenuTrigger asChild>
+              <DropdownMenuTrigger asChild>
                 <Button className="gradient-primary text-primary-foreground transition-colors hover:opacity-90">
                   <Download className="mr-2 h-4 w-4" />
                   Download All
@@ -425,39 +571,115 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }
           </div>
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {worklets.map((worklet) => (
-              <Button
-                key={worklet.worklet_id}
-                variant="outline"
-                className="justify-start border-border transition-colors hover:border-primary"
-                onClick={() => handleOpenWorklet(worklet)}
-              >
-                <FileIcon className="mr-2 h-4 w-4" />
-                {getStringIteration(worklet.title)}
-              </Button>
-            ))}
+            {worklets.map((worklet) => {
+              const iteration = getDefaultWorkletIteration(worklet);
+              return (
+                <Button
+                  key={worklet.worklet_id}
+                  variant="outline"
+                  className="justify-start border-border transition-colors hover:border-primary"
+                  onClick={() => handleOpenWorklet(worklet)}
+                >
+                  <FileIcon className="mr-2 h-4 w-4" />
+                  {getStringIteration(iteration.title)}
+                </Button>
+              );
+            })}
           </div>
         </Card>
       )}
 
       <Dialog open={isDialogOpen} onOpenChange={handleDialogOpenChange}>
         <DialogContent className="max-h-[90vh] max-w-3xl">
-          {activeWorklet && (
+          {activeWorklet && activeIteration && (
             <>
               <DialogHeader>
-                <DialogTitle className="text-2xl leading-tight [overflow-wrap:anywhere]">
-                  {getActiveTitle()}
-                </DialogTitle>
-                {isIterating && (
-                  <DialogDescription className="text-sm text-muted-foreground">
-                    Iteration in progress. Please wait...
-                  </DialogDescription>
-                )}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex-1">
+                    <DialogTitle className="text-2xl leading-tight [overflow-wrap:anywhere]">
+                      {getActiveTitle()}
+                    </DialogTitle>
+                    {isIterating && (
+                      <DialogDescription className="text-sm text-muted-foreground">
+                        Iteration in progress. Please wait...
+                      </DialogDescription>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => handleIterationNavigate(-1)}
+                      disabled={isIterating || isEnhancing || totalWorkletIterations <= 1 || activeIterationIndex <= 0}
+                      aria-label="Previous worklet iteration"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="min-w-[3rem] text-center text-xs font-mono text-foreground">
+                      {totalWorkletIterations > 0
+                        ? `${activeIterationIndex + 1}/${totalWorkletIterations}`
+                        : '0/0'}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => handleIterationNavigate(1)}
+                      disabled={
+                        isIterating ||
+                        isEnhancing ||
+                        totalWorkletIterations <= 1 ||
+                        activeIterationIndex >= totalWorkletIterations - 1
+                      }
+                      aria-label="Next worklet iteration"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={handleSelectDefaultIteration}
+                      disabled={
+                        isIterating ||
+                        isEnhancing ||
+                        defaultSelecting ||
+                        activeWorklet.selected_iteration_index === activeIterationIndex
+                      }
+                      aria-label="Set default worklet iteration"
+                    >
+                      {defaultSelecting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Check className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => setEnhanceDialogOpen(true)}
+                      disabled={isIterating || isEnhancing}
+                      aria-label="Enhance worklet"
+                    >
+                      {isEnhancing ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Pencil className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
               </DialogHeader>
               <ScrollArea className="h-[60vh] pr-4">
                 <div className="space-y-6">
                   {FIELD_CONFIGS.map((field) => {
-                    const attr = getAttribute(activeWorklet, field.key);
+                    const attr = getAttribute(activeIteration, field.key);
                     const total = getIterationCount(attr);
                     const viewIndex = getViewIndex(field.key);
                     const selectedIndex = getSelectedIndex(attr);
@@ -488,7 +710,7 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7"
-                              onClick={() => handleNavigate(field.key, -1)}
+                              onClick={() => handleNavigateField(field.key, -1)}
                               disabled={isIterating || total <= 1 || viewIndex <= 0}
                               aria-label={`Previous iteration for ${field.label}`}
                             >
@@ -502,7 +724,7 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7"
-                              onClick={() => handleNavigate(field.key, 1)}
+                              onClick={() => handleNavigateField(field.key, 1)}
                               disabled={isIterating || total <= 1 || viewIndex >= total - 1}
                               aria-label={`Next iteration for ${field.label}`}
                             >
@@ -515,7 +737,7 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7"
-                              onClick={() => handleSelectIteration(field.key, viewIndex)}
+                              onClick={() => handleSelectFieldIteration(field.key, viewIndex)}
                               disabled={isIterating || selectingField === field.key}
                               aria-label={`Select iteration ${viewIndex + 1} for ${field.label}`}
                             >
@@ -531,8 +753,8 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7"
-                            onClick={() => handleOpenPrompt(field.key, viewIndex)}
-                            disabled={isIterating}
+                            onClick={() => handleOpenFieldPrompt(field.key, viewIndex)}
+                            disabled={isIterating || isEnhancing}
                             aria-label={`Iterate ${field.label}`}
                           >
                             <Pencil className="h-4 w-4" />
@@ -550,15 +772,15 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }
                     );
                   })}
 
-                  <ReasoningField reasoning={activeWorklet.reasoning} />
-                  <ReferencesField references={activeWorklet.references} />
+                  <ReasoningField reasoning={activeIteration.reasoning} />
+                  <ReferencesField references={activeIteration.references} />
                 </div>
               </ScrollArea>
               <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => handleDownload('pdf')} disabled={isIterating}>
+                <Button variant="outline" onClick={() => handleDownload('pdf')} disabled={isIterating || isEnhancing}>
                   <Download className="mr-1 h-4 w-4" /> PDF
                 </Button>
-                <Button onClick={() => handleDownload('ppt')} disabled={isIterating}>
+                <Button onClick={() => handleDownload('ppt')} disabled={isIterating || isEnhancing}>
                   <Download className="mr-1 h-4 w-4" /> PPT
                 </Button>
               </div>
@@ -567,21 +789,21 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }
         </DialogContent>
       </Dialog>
 
-      <Dialog open={promptState.open} onOpenChange={(open) => (!open ? closePrompt() : null)}>
+      <Dialog open={fieldPromptState.open} onOpenChange={(open) => (!open ? closeFieldPrompt() : null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Provide iteration prompt</DialogTitle>
-            {promptState.field && (
+            {fieldPromptState.field && (
               <DialogDescription>
-                Field: {FIELD_CONFIGS.find((f) => f.key === promptState.field)?.label} · Iteration {promptState.iterationIndex + 1}
+                Field: {FIELD_CONFIGS.find((f) => f.key === fieldPromptState.field)?.label} · Iteration {fieldPromptState.iterationIndex + 1}
               </DialogDescription>
             )}
           </DialogHeader>
           <div className="space-y-3">
             <Textarea
-              value={promptState.prompt}
+              value={fieldPromptState.prompt}
               onChange={(event) =>
-                setPromptState((prev) => ({ ...prev, prompt: event.target.value }))
+                setFieldPromptState((prev) => ({ ...prev, prompt: event.target.value }))
               }
               placeholder="Describe how you would like to change this iteration..."
               disabled={isIterating}
@@ -592,18 +814,67 @@ export const ThreadDetails = ({ thread, worklets, onUpdateWorklet, clusterName }
             <Button
               type="button"
               variant="outline"
-              onClick={closePrompt}
+              onClick={closeFieldPrompt}
               disabled={isIterating}
             >
               Cancel
             </Button>
-            <Button type="button" onClick={handlePromptSubmit} disabled={isIterating}>
+            <Button type="button" onClick={handleFieldPromptSubmit} disabled={isIterating}>
               {isIterating ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 <Pencil className="mr-2 h-4 w-4" />
               )}
               Iterate
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={enhanceDialogOpen} onOpenChange={(open) => {
+        if (!open && !isEnhancing) {
+          setEnhanceDialogOpen(false);
+          setEnhancePrompt('');
+        } else if (open) {
+          setEnhanceDialogOpen(true);
+        }
+      }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Enhance worklet</DialogTitle>
+            <DialogDescription>
+              Provide instructions to refine the entire worklet iteration.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Textarea
+              value={enhancePrompt}
+              onChange={(event) => setEnhancePrompt(event.target.value)}
+              placeholder="Describe how you would like to enhance this worklet..."
+              disabled={isEnhancing}
+              className="min-h-[140px]"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (isEnhancing) return;
+                setEnhanceDialogOpen(false);
+                setEnhancePrompt('');
+              }}
+              disabled={isEnhancing}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleEnhanceSubmit} disabled={isEnhancing}>
+              {isEnhancing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Pencil className="mr-2 h-4 w-4" />
+              )}
+              Enhance
             </Button>
           </div>
         </DialogContent>
@@ -681,7 +952,7 @@ const ReasoningField = ({ reasoning }: { reasoning: string }) => {
   );
 };
 
-const ReferencesField = ({ references }: { references: TransformedWorklet['references'] }) => {
+const ReferencesField = ({ references }: { references: WorkletIteration['references'] }) => {
   if (!references || references.length === 0) {
     return null;
   }

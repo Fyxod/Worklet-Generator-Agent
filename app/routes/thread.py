@@ -6,6 +6,7 @@ import re
 from urllib.parse import quote
 from core.models.worklet import Worklet
 from core.utils.generate_files import create_pdf, create_ppt
+from core.utils.worklet_store import iteration_to_worklet
 from core.utils.sanitize_filename import sanitize_filename
 from core.utils.fix_dashes import fix_dashes
 from core.database import db
@@ -59,6 +60,22 @@ def _normalize_worklet_record(record: dict) -> dict:
         "worklet_id": record.get("worklet_id"),
         "references": deepcopy(record.get("references", [])),
     }
+    iterations = record.get("iterations")
+    if isinstance(iterations, list) and iterations:
+        idx = record.get("selected_iteration_index", 0)
+        try:
+            idx = int(idx)
+        except Exception:
+            idx = 0
+        if idx < 0 or idx >= len(iterations):
+            idx = 0
+        iteration_payload = iterations[idx]
+        worklet_model = iteration_to_worklet(iteration_payload)
+        normalized = worklet_model.model_dump()
+        normalized["worklet_id"] = record.get(
+            "worklet_id", normalized.get("worklet_id")
+        )
+        return normalized
 
     # Strings
     for f in _STRING_FIELDS:

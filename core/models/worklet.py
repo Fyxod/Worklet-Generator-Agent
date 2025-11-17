@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import List
 
@@ -112,6 +113,25 @@ class TransformedWorklet(BaseModel):
     references: List[Reference] = Field(
         ...,
         description="List of relevant academic references or papers for the project idea",
+    )
+
+
+class WorkletIteration(TransformedWorklet):
+    iteration_id: str = Field(
+        ..., description="Unique identifier for a specific worklet iteration"
+    )
+    created_at: datetime = Field(
+        ..., description="Timestamp indicating when this iteration was created"
+    )
+
+
+class StoredWorklet(BaseModel):
+    worklet_id: str = Field(..., description="Unique identifier for the worklet")
+    selected_iteration_index: int = Field(
+        ..., ge=0, description="Index of the default iteration for this worklet"
+    )
+    iterations: List[WorkletIteration] = Field(
+        ..., description="Ordered list of worklet iterations"
     )
 
 

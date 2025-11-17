@@ -10,6 +10,13 @@ from core.llm.client import invoke_llm
 from core.constants import WORKLET_GENERATOR_LLM
 from core.llm.prompts.iteration_prompt import build_iteration_prompt
 from core.models.worklet import Worklet
+from core.utils.worklet_store import (
+    STRING_FIELDS as STRING_FIELD_NAMES,
+    ARRAY_FIELDS as ARRAY_FIELD_NAMES,
+    OBJECT_FIELDS as OBJECT_FIELD_NAMES,
+    upgrade_legacy_worklet_record,
+    extract_iteration_value as store_extract_iteration_value,
+)
 import aiofiles
 
 
@@ -19,19 +26,9 @@ MAX_MODEL_ATTEMPTS = 10
 router = APIRouter(prefix="/iterate", tags=["iterate"])
 
 
-STRING_FIELDS = {
-    "title",
-    "problem_statement",
-    "description",
-    "challenge_use_case",
-    "deliverables",
-    "infrastructure_requirements",
-    "tech_stack",
-}
-
-ARRAY_FIELDS = {"kpis", "prerequisites"}
-
-OBJECT_FIELDS = {"milestones"}
+STRING_FIELDS = set(STRING_FIELD_NAMES)
+ARRAY_FIELDS = set(ARRAY_FIELD_NAMES)
+OBJECT_FIELDS = set(OBJECT_FIELD_NAMES)
 
 ALL_FIELDS = STRING_FIELDS | ARRAY_FIELDS | OBJECT_FIELDS
 
@@ -39,6 +36,9 @@ ALL_FIELDS = STRING_FIELDS | ARRAY_FIELDS | OBJECT_FIELDS
 class IterateRequest(BaseModel):
     worklet_id: str = Field(
         ..., description="Unique identifier for the worklet to iterate"
+    )
+    worklet_iteration_id: str = Field(
+        ..., description="Identifier of the worklet iteration being updated"
     )
     field: Literal[
         "title",
@@ -73,28 +73,31 @@ class ObjectFieldResponse(BaseModel):
 
 
 def _extract_iteration_value(
-    field_name: str, field_payload: dict, target_index: int
+    field_name: str, field_payload: dict, target_index: int | None
 ) -> object:
-    iterations = field_payload.get("iterations", [])
-    if not iterations:
+    try:
+        return store_extract_iteration_value(field_payload, index=target_index)
+    except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Field '{field_name}' has no iterations available.",
+        ) from exc
+    except IndexError as exc:
+        index_message = (
+            str(target_index)
+            if target_index is not None
+            else str(field_payload.get("selected_index", 0))
         )
-
-    if target_index < 0 or target_index >= len(iterations):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Index {target_index} is out of range for field '{field_name}'.",
-        )
-
-    return deepcopy(iterations[target_index])
+            detail=f"Index {index_message} is out of range for field '{field_name}'.",
+        ) from exc
 
 
 def _hydrate_worklet(
-    worklet_record: dict, override_field: str, override_index: int
+    worklet_id: str, iteration_record: dict, override_field: str, override_index: int
 ) -> Worklet:
-    raw_reasoning = worklet_record.get("reasoning", "")
+    raw_reasoning = iteration_record.get("reasoning", "")
     if isinstance(raw_reasoning, dict):
         raw_reasoning = _extract_iteration_value(
             "reasoning",
@@ -105,25 +108,22 @@ def _hydrate_worklet(
         raw_reasoning = ""
 
     payload = {
-        "worklet_id": worklet_record["worklet_id"],
-        "references": deepcopy(worklet_record.get("references", [])),
+        "worklet_id": worklet_id,
+        "references": deepcopy(iteration_record.get("references", [])),
         "reasoning": (
             raw_reasoning if isinstance(raw_reasoning, str) else str(raw_reasoning)
         ),
     }
 
     for field_name in ALL_FIELDS:
-        field_payload = worklet_record.get(field_name)
+        field_payload = iteration_record.get(field_name)
         if field_payload is None:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Field '{field_name}' is missing from the worklet record.",
+                detail=f"Field '{field_name}' is missing from the worklet iteration.",
             )
 
-        if field_name == override_field:
-            selected_index = override_index
-        else:
-            selected_index = field_payload.get("selected_index", 0)
+        selected_index = override_index if field_name == override_field else None
 
         payload[field_name] = _extract_iteration_value(
             field_name, field_payload, selected_index
@@ -156,7 +156,7 @@ def _resolve_schema_and_description(field_name: str):
 async def iterate_worklet(payload: IterateRequest):
     thread = db.threads.find_one(
         {"worklets.worklet_id": payload.worklet_id},
-        {"worklets": 1},
+        {"_id": 1, "worklets": 1},
     )
 
     if not thread:
@@ -177,17 +177,51 @@ async def iterate_worklet(payload: IterateRequest):
             detail="Worklet not found in thread document.",
         )
 
-    if payload.field not in worklet_record:
+    if "iterations" not in worklet_record or not isinstance(
+        worklet_record.get("iterations"), list
+    ):
+        upgraded = upgrade_legacy_worklet_record(worklet_record)
+        db.threads.update_one(
+            {"_id": thread.get("_id"), "worklets.worklet_id": payload.worklet_id},
+            {"$set": {"worklets.$": upgraded}},
+        )
+        worklet_record = upgraded
+
+    iterations = worklet_record.get("iterations") or []
+    if not iterations:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Field '{payload.field}' does not exist on the worklet.",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No iterations exist for this worklet.",
         )
 
-    _ = _extract_iteration_value(
-        payload.field, worklet_record[payload.field], payload.index
+    iteration_record = next(
+        (
+            item
+            for item in iterations
+            if item.get("iteration_id") == payload.worklet_iteration_id
+        ),
+        None,
     )
 
-    worklet = _hydrate_worklet(worklet_record, payload.field, payload.index)
+    if iteration_record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Worklet iteration not found.",
+        )
+
+    if payload.field not in iteration_record:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Field '{payload.field}' does not exist on the worklet iteration.",
+        )
+
+    field_payload = iteration_record[payload.field]
+
+    _ = _extract_iteration_value(payload.field, field_payload, payload.index)
+
+    worklet = _hydrate_worklet(
+        worklet_record["worklet_id"], iteration_record, payload.field, payload.index
+    )
 
     response_schema, field_description = _resolve_schema_and_description(payload.field)
 
@@ -243,20 +277,23 @@ async def iterate_worklet(payload: IterateRequest):
             or "Iteration model failed to produce a valid response after multiple attempts.",
         )
 
-    field_payload = worklet_record[payload.field]
     existing_iterations = field_payload.get("iterations", [])
     existing_iterations = list(existing_iterations)
     updated_iterations = [*existing_iterations, new_value]
     updated_index = len(updated_iterations) - 1
 
     update_result = db.threads.update_one(
-        {"_id": thread["_id"], "worklets.worklet_id": payload.worklet_id},
+        {"_id": thread["_id"]},
         {
             "$set": {
-                f"worklets.$.{payload.field}.iterations": updated_iterations,
-                f"worklets.$.{payload.field}.selected_index": updated_index,
+                f"worklets.$[worklet].iterations.$[iteration].{payload.field}.iterations": updated_iterations,
+                f"worklets.$[worklet].iterations.$[iteration].{payload.field}.selected_index": updated_index,
             }
         },
+        array_filters=[
+            {"worklet.worklet_id": payload.worklet_id},
+            {"iteration.iteration_id": payload.worklet_iteration_id},
+        ],
     )
 
     if update_result.matched_count == 0:
@@ -267,6 +304,7 @@ async def iterate_worklet(payload: IterateRequest):
 
     return {
         "worklet_id": payload.worklet_id,
+        "worklet_iteration_id": payload.worklet_iteration_id,
         "field": payload.field,
         "selected_index": updated_index,
         "iterations": updated_iterations,

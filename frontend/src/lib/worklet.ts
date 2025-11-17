@@ -5,7 +5,9 @@ import {
     Thread,
     ThreadApiResponse,
     TransformedWorklet,
+    WorkletIteration,
     WorkletPayload,
+    WorkletWithIterations,
 } from '@/types/thread';
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -16,6 +18,13 @@ const clampIndex = (index: number, length: number): number => {
     if (length <= 0) return 0;
     if (Number.isNaN(index)) return 0;
     return Math.min(Math.max(index, 0), length - 1);
+};
+
+const generateIterationId = (): string => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    return `iter-${Math.random().toString(36).slice(2, 10)}`;
 };
 
 const sanitizeStringIterations = (iterations: unknown): string[] => {
@@ -152,9 +161,85 @@ export const ensureTransformedWorklet = (input: WorkletPayload): TransformedWork
     };
 };
 
+const ensureWorkletIterationInternal = (
+    input: WorkletPayload | WorkletIteration,
+): WorkletIteration => {
+    const normalized = ensureTransformedWorklet(input as WorkletPayload);
+    const record = isRecord(input) ? input : {};
+    const iterationIdRaw = (record as any).iteration_id;
+    const createdAtRaw = (record as any).created_at;
+
+    const iteration_id =
+        typeof iterationIdRaw === 'string' && iterationIdRaw.trim().length > 0
+            ? iterationIdRaw
+            : generateIterationId();
+    const created_at =
+        typeof createdAtRaw === 'string' && createdAtRaw.trim().length > 0
+            ? createdAtRaw
+            : new Date().toISOString();
+
+    return {
+        ...normalized,
+        iteration_id,
+        created_at,
+    };
+};
+
+export const ensureWorkletIteration = (
+    input: WorkletPayload | WorkletIteration,
+): WorkletIteration => ensureWorkletIterationInternal(input);
+
+const isWorkletBundle = (value: unknown): value is WorkletWithIterations => {
+    return (
+        isRecord(value) &&
+        Array.isArray((value as any).iterations) &&
+        typeof (value as any).selected_iteration_index !== 'undefined'
+    );
+};
+
+export const ensureWorkletBundle = (
+    input: WorkletPayload | WorkletWithIterations,
+): WorkletWithIterations => {
+    if (isWorkletBundle(input)) {
+        const iterationsSource = Array.isArray(input.iterations)
+            ? input.iterations
+            : [];
+        const iterations = iterationsSource.map((iteration) =>
+            ensureWorkletIterationInternal(iteration as WorkletIteration),
+        );
+        const safeIterations = iterations.length > 0
+            ? iterations
+            : [ensureWorkletIterationInternal(input as WorkletPayload)];
+        const selected = clampIndex(
+            typeof input.selected_iteration_index === 'number'
+                ? input.selected_iteration_index
+                : 0,
+            safeIterations.length,
+        );
+        const workletId =
+            typeof input.worklet_id === 'string' && input.worklet_id.trim().length > 0
+                ? input.worklet_id
+                : safeIterations[0]?.worklet_id ?? '';
+        return {
+            worklet_id: workletId,
+            selected_iteration_index: selected,
+            iterations: safeIterations,
+        };
+    }
+
+    const iteration = ensureWorkletIterationInternal(input as WorkletPayload);
+    return {
+        worklet_id: iteration.worklet_id,
+        selected_iteration_index: 0,
+        iterations: [iteration],
+    };
+};
+
 export const normalizeThreadResponse = (thread: ThreadApiResponse): Thread => {
     const { worklets, ...rest } = thread;
-    const normalizedWorklets = Array.isArray(worklets) ? worklets.map(ensureTransformedWorklet) : [];
+    const normalizedWorklets = Array.isArray(worklets)
+        ? worklets.map((entry) => ensureWorkletBundle(entry as WorkletPayload))
+        : [];
     const base = { ...(rest as Record<string, unknown>) };
     if (typeof base.cluster_id !== 'string') {
         base.cluster_id = '';
@@ -200,3 +285,30 @@ export const clampToIterations = (attr: { iterations: unknown[] }, index: number
     const length = Array.isArray(attr.iterations) ? attr.iterations.length : 0;
     return clampIndex(index, length);
 };
+
+export const clampWorkletIterationIndex = (
+    worklet: WorkletWithIterations,
+    index: number,
+): number => clampIndex(index, worklet.iterations.length);
+
+export const getWorkletIterationAt = (
+    worklet: WorkletWithIterations,
+    index?: number,
+): WorkletIteration => {
+    const iterations = Array.isArray(worklet.iterations) ? worklet.iterations : [];
+    if (iterations.length === 0) {
+        return ensureWorkletIteration(worklet as unknown as WorkletPayload);
+    }
+    const resolvedIndex = typeof index === 'number'
+        ? clampIndex(index, iterations.length)
+        : clampIndex(worklet.selected_iteration_index ?? 0, iterations.length);
+    return iterations[resolvedIndex];
+};
+
+export const getWorkletIterationCount = (worklet: WorkletWithIterations): number => {
+    return worklet.iterations.length;
+};
+
+export const getDefaultWorkletIteration = (
+    worklet: WorkletWithIterations,
+): WorkletIteration => getWorkletIterationAt(worklet, worklet.selected_iteration_index);

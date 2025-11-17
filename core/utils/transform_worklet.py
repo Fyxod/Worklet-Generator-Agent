@@ -1,27 +1,16 @@
-# Transform worklets to match database schema
-def transform_worklet(worklet):
+from typing import Dict, Any
+
+from core.utils.worklet_store import build_initial_iteration
+
+
+# Transform worklets to match database schema with iteration container
+def transform_worklet(worklet: Dict[str, Any]) -> Dict[str, Any]:
+    base_iteration = build_initial_iteration(worklet)
+
     transformed = {
         "worklet_id": worklet["worklet_id"],
-        "references": worklet["references"],
-        "reasoning": str(worklet.get("reasoning", "") or ""),
+        "selected_iteration_index": 0,
+        "iterations": [base_iteration],
     }
-    string_attrs = [
-        "title",
-        "problem_statement",
-        "description",
-        "challenge_use_case",
-        "deliverables",
-        "infrastructure_requirements",
-        "tech_stack",
-    ]
-    array_attrs = ["kpis", "prerequisites"]
-    object_attrs = ["milestones"]
-
-    for attr in string_attrs:
-        transformed[attr] = {"selected_index": 0, "iterations": [worklet[attr]]}
-    for attr in array_attrs:
-        transformed[attr] = {"selected_index": 0, "iterations": [worklet[attr]]}
-    for attr in object_attrs:
-        transformed[attr] = {"selected_index": 0, "iterations": [worklet[attr]]}
 
     return transformed

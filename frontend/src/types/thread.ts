@@ -59,6 +59,22 @@ export interface TransformedWorklet {
   references: Reference[];
 }
 
+export interface WorkletIteration extends TransformedWorklet {
+  /** Unique identifier for this worklet iteration */
+  iteration_id: string;
+  /** Creation timestamp for this iteration */
+  created_at: string;
+}
+
+export interface WorkletWithIterations {
+  /** Unique identifier for the worklet */
+  worklet_id: string;
+  /** Index of the default worklet iteration */
+  selected_iteration_index: number;
+  /** All iterations available for this worklet */
+  iterations: WorkletIteration[];
+}
+
 export interface Worklet {
   /** Unique identifier for the worklet */
   worklet_id: string;
@@ -88,7 +104,7 @@ export interface Worklet {
   references: Reference[];
 }
 
-export type WorkletPayload = Worklet | TransformedWorklet;
+export type WorkletPayload = Worklet | TransformedWorklet | WorkletWithIterations;
 
 export type WorkletFieldKey =
   | 'title'
@@ -111,9 +127,22 @@ export interface SelectIterationResponse {
 
 export interface IterateWorkletResponse {
   worklet_id: string;
+  worklet_iteration_id: string;
   field: WorkletFieldKey;
   selected_index: number;
   iterations: unknown[];
+}
+
+export interface EnhanceWorkletResponse {
+  worklet_id: string;
+  selected_iteration_index: number;
+  iteration: unknown;
+}
+
+export interface SelectWorkletIterationResponse {
+  success: boolean;
+  worklet_id: string;
+  selected_iteration_index: number;
 }
 
 export interface Thread {
@@ -126,13 +155,13 @@ export interface Thread {
   count: number;
   generated: boolean;
   created_at: string;
-  worklets?: TransformedWorklet[];
+  worklets?: WorkletWithIterations[];
   /** Indicates this thread object was created optimistically on the client and not yet confirmed via GET /thread/{id} */
   local?: boolean;
 }
 
 export type ThreadApiResponse = Omit<Thread, 'worklets'> & {
-  worklets?: WorkletPayload[];
+  worklets?: unknown[];
 };
 
 export interface DomainsKeywords {

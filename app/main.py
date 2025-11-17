@@ -7,7 +7,15 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.routes import cluster, generate, health, iterate, select, thread
+from app.routes import (
+    cluster,
+    generate,
+    health,
+    iterate,
+    select,
+    thread,
+    worklet_iterations,
+)
 from app.socket_handler import sio
 
 fastapi_app = FastAPI()
@@ -74,5 +82,6 @@ fastapi_app.include_router(thread.router)
 fastapi_app.include_router(generate.router)
 fastapi_app.include_router(iterate.router)
 fastapi_app.include_router(select.router)
+fastapi_app.include_router(worklet_iterations.router)
 
 app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)
